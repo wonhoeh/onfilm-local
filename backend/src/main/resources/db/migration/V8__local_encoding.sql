@@ -1,0 +1,8 @@
+CREATE TABLE encode_job (
+    id VARCHAR(36) PRIMARY KEY,
+    video_id VARCHAR(36) NOT NULL UNIQUE REFERENCES local_video(id),
+    status VARCHAR(20) NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    message VARCHAR(300) NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

@@ -1,0 +1,9 @@
+.film-slider-wrapper { overflow-x:auto; scrollbar-width:thin; }
+.film-card { text-decoration:none; color:inherit; }
+#publicStatus:empty { display:none; }
+dialog { max-width:min(90vw,900px); color:#eee; background:#15161b; border:1px solid #555; border-radius:12px; padding:20px; }
+dialog::backdrop { background:#000c; }
+#largePhoto { display:block; max-width:100%; max-height:75vh; margin-bottom:12px; }
+dialog button { padding:8px 20px; cursor:pointer; }
+.local-preview-exit { display:block; padding:10px; text-align:center; color:white; background:#303047; }
+@media(max-width:600px) { .film-card { flex-basis:80%; max-width:80%; } }

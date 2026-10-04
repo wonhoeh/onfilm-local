@@ -1,0 +1,6 @@
+#gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 20px; }
+#gallery figure { margin: 0; padding: 10px; border: 1px solid #4a4c48; border-radius: 6px; }
+#gallery img { display: block; width: 100%; height: 170px; object-fit: contain; margin-bottom: 10px; }
+#gallery button { padding: 7px; margin: 2px; font-size: 13px; }
+#gallery-status { color: #cbb68b; }
+#portrait { max-width: 100%; height: auto; }

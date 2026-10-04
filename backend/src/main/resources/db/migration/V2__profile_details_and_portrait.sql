@@ -1,0 +1,3 @@
+ALTER TABLE profile ADD birth_date DATE;
+ALTER TABLE profile ADD birth_place VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE profile ADD portrait BINARY LARGE OBJECT;

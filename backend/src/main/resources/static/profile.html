@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>배우 상세 페이지</title>
+        <link rel="stylesheet" href="/css/common.css">
+        <link rel="stylesheet" href="/css/actor-detail.css">
+<link rel="stylesheet" href="/css/local-detail.css">
+</head>
+
+<body>
+<div class="page-root booting" id="pageRoot">
+    <header>
+        <div class="container header-row">
+            <a href="/" class="logo">OnFilm</a>
+            <div class="header-right" id="headerActions" ></div>
+        </div>
+    </header>
+
+    <main class="container">
+<p id="viewStatus" class="local-status" role="status">프로필을 불러오는 중입니다.</p><button id="retryProfile" class="btn" hidden>다시 시도</button>
+
+        <!-- PROFILE -->
+        <div class="profile-header" id="profileContent">
+            <img id="profilePhoto"
+                 class="profile-photo"
+                 src="/images/profile-placeholder.png"
+                 data-profile-src=""
+                 alt="프로필 사진" />
+
+            <div class="profile-info">
+                <div class="profile-title-row">
+                    <h1 id="profileName" data-value="">회원</h1>
+                    <button type="button"
+                            class="profile-settings-btn"
+                            id="profileSettingsBtn"
+                            aria-haspopup="true"
+                            aria-expanded="false"
+                            title="편집 메뉴 열기">⚙️</button>
+                </div>
+
+                <div class="meta" id="profileMeta" data-birth-date="" data-birth-place="">
+                    생년월일 · 출생지 미등록
+                </div>
+
+                <p class="bio" id="bioDisplay" data-value="">
+                    소개글을 입력해 주세요.
+                </p>
+
+                <div class="sns-row" id="snsRow"></div>
+                <section id="contactSection" class="profile-tag-section" hidden><div class="profile-tag-title">CONTACT ME</div><p id="contactEmailDisplay"></p></section>
+
+                <section class="profile-tag-section">
+                    <div class="profile-tag-title">PROFILE TAGS</div>
+                    <div class="profile-tag-list" id="tagList"></div>
+                </section>
+            </div>
+        </div>
+
+        <!-- FILMOGRAPHY -->
+        <section class="filmography-section" id="filmographySection">
+            <h2>FILMOGRAPHY</h2>
+
+            <div class="film-slider-container" id="filmSliderContainer">
+
+                <!-- ✅ owner-only -->
+                <div class="empty-cta hidden owner-only" id="filmEmpty">
+                    <a class="empty-cta-icon" href="/edit-filmography.html" aria-label="필모그래피 등록하기">
+            <span class="empty-cta-ring">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6.5h16v11H4z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 6.5v11M16 6.5v11"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.2 8.2h.01M6.2 10.2h.01M6.2 12.2h.01M6.2 14.2h.01"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17.8 8.2h.01M17.8 10.2h.01M17.8 12.2h.01M17.8 14.2h.01"/>
+              </svg>
+            </span>
+                    </a>
+
+                    <div class="empty-cta-title">필모그래피 공유</div>
+                    <div class="empty-cta-desc">작품을 등록하면 회원님의 프로필에 표시됩니다.</div>
+                    <a class="empty-cta-link" href="/edit-filmography.html">첫 작품 등록하기</a>
+                </div>
+
+                <!-- ✅ view-only -->
+                <div class="empty-cta hidden view-only" id="filmEmptyViewOnly">
+                    <a class="empty-cta-icon" href="javascript:void(0)" aria-label="필모그래피 게시물 없음">
+            <span class="empty-cta-ring">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6.5h16v11H4z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 6.5v11M16 6.5v11"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.2 8.2h.01M6.2 10.2h.01M6.2 12.2h.01M6.2 14.2h.01"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17.8 8.2h.01M17.8 10.2h.01M17.8 12.2h.01M17.8 14.2h.01"/>
+              </svg>
+            </span>
+                    </a>
+
+                    <div class="empty-cta-title">게시물 없음</div>
+                </div>
+
+                <button class="film-arrow left" id="filmPrevBtn" aria-label="이전 작품">‹</button>
+
+                <div class="film-slider-wrapper">
+                    <div class="film-slider" id="filmSlider"></div>
+                </div>
+
+                <button class="film-arrow right" id="filmNextBtn" aria-label="다음 작품">›</button>
+            </div>
+        </section>
+
+        <!-- GALLERY -->
+        <section class="gallery-section" id="gallerySection">
+            <h2>PHOTO</h2>
+            <div class="gallery-grid" id="galleryGrid">
+
+                <!-- ✅ owner-only -->
+                <div class="empty-cta hidden owner-only" id="galleryEmpty">
+                    <a class="empty-cta-icon" href="/edit-gallery.html" aria-label="사진 공유하기">
+            <span class="empty-cta-ring">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M7 7.5h2l1-1.5h4l1 1.5h2A3 3 0 0 1 20 10.5v7A3 3 0 0 1 17 20.5H7A3 3 0 0 1 4 17.5v-7A3 3 0 0 1 7 7.5Z"/>
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M12 11a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 7.5l.9-1.2"/>
+              </svg>
+            </span>
+                    </a>
+
+                    <div class="empty-cta-title">사진 공유</div>
+                    <div class="empty-cta-desc">사진을 공유하면 회원님의 프로필에 표시됩니다.</div>
+                    <a class="empty-cta-link" href="/edit-gallery.html">첫 사진 등록하기</a>
+                </div>
+
+                <!-- ✅ view-only -->
+                <div class="empty-cta hidden view-only" id="galleryEmptyViewOnly">
+                    <a class="empty-cta-icon" href="javascript:void(0)" aria-label="갤러리 게시물 없음">
+            <span class="empty-cta-ring">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M7 7.5h2l1-1.5h4l1 1.5h2A3 3 0 0 1 20 10.5v7A3 3 0 0 1 17 20.5H7A3 3 0 0 1 4 17.5v-7A3 3 0 0 1 7 7.5Z"/>
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M12 11a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 7.5l.9-1.2"/>
+              </svg>
+            </span>
+                    </a>
+
+                    <div class="empty-cta-title">게시물 없음</div>
+                </div>
+
+                <!-- gallery-item들은 데이터 있으면 여기에 append -->
+            </div>
+
+            <p id="galleryViewStatus" class="local-status" role="status"></p><button id="retryGallery" class="btn" hidden>사진 다시 읽기</button>
+<div class="gallery-spinner" id="gallerySpinner">
+                <div class="spinner-circle"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer>© 2026 OnFilm · Indie Actor & Film Platform</footer>
+</div>
+
+<!-- 프로필 편집 오버레이 -->
+<div class="profile-edit-overlay" id="profileEditOverlay" role="dialog" aria-modal="true" aria-label="프로필 편집 메뉴" hidden>
+    <div class="profile-edit-card">
+        <button class="profile-settings-item" id="editProfileLink" data-action="profile"><span>프로필 편집</span></button>
+        <button class="profile-settings-item" data-action="filmography"><span>필모그래피 편집</span></button>
+        <button class="profile-settings-item" id="editGalleryLink" data-action="gallery"><span>사진 갤러리 편집</span></button>
+        <button class="profile-settings-item" id="exportLink" data-action="export"><span>공개본 만들기 · 미리보기</span></button>
+        <button class="profile-settings-item" id="backupLink" data-action="backup"><span>데이터 백업 · 복원</span></button>
+        <button class="profile-settings-item close-item" data-action="close"><span>창 닫기</span></button>
+    </div>
+</div>
+
+<dialog id="localNotice" class="profile-edit-card"><h2 id="noticeTitle"></h2><p id="noticeText"></p><input id="noticeUrl" readonly hidden aria-label="SNS 주소"><button id="noticeClose" class="btn">닫기</button></dialog>
+<div id="lightbox" class="gallery-lightbox-overlay" role="dialog" aria-modal="true" aria-label="사진 크게 보기" hidden>
+<button id="previousPhoto" class="gallery-lightbox-arrow left" aria-label="이전 사진">‹</button>
+<img id="lightboxImage" class="gallery-lightbox-image" alt="사진 크게 보기">
+<button id="nextPhoto" class="gallery-lightbox-arrow right" aria-label="다음 사진">›</button>
+<button id="closeLightbox" class="local-lightbox-close btn">닫기</button></div>
+<script src="/profile.js" defer></script>
+</body></html>

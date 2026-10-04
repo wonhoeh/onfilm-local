@@ -1,0 +1,7 @@
+CREATE TABLE gallery_state (id INTEGER PRIMARY KEY CHECK (id=1), version BIGINT NOT NULL DEFAULT 0);
+INSERT INTO gallery_state (id) VALUES (1);
+CREATE TABLE gallery_photo (
+    id VARCHAR(36) PRIMARY KEY,
+    position INTEGER NOT NULL,
+    image BINARY LARGE OBJECT NOT NULL
+);

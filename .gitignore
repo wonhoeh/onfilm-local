@@ -1,0 +1,59 @@
+# OS / editor files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# Dependencies and generated build output
+**/.gradle/
+**/build/
+**/build-verification/
+**/node_modules/
+**/dist/
+**/out/
+**/coverage/
+
+# Local environment and signing secrets (keep the example template)
+**/.env
+**/.env.*
+!**/.env.example
+.aws/
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.key
+
+# H2 files, logs and crash dumps
+*.mv.db
+*.trace.db
+*.lock.db
+*.temp.db
+*.mv.db.*
+*.log
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# Downloaded runtimes and preparation staging
+runtime/
+
+# App data accidentally placed in the repository.
+# Keep these root-scoped: media/ and export/ also exist as source packages.
+/data/
+/database/
+/media/
+/exports/
+/backups/
+/desktop/data/
+/backend/data/
+onfilm-backup-*/
+onfilm-before-restore-*/
+.onfilm-restore-*/
+onfilm-failed-restore-*/
+*.restore-pending.json
+
+# Required for reproducible Gradle builds
+!**/gradle/wrapper/gradle-wrapper.jar

@@ -1,0 +1,231 @@
+
+        :root{
+            --bg:#0b0c0f;
+            --panel:#12131a;
+            --panel-2:#161824;
+            --text:#e7e8ee;
+            --muted:#9aa0ad;
+            --line:rgba(255,255,255,.12);
+            --accent:#7c5cff;
+            --accent-2:#24d39a;
+            --radius-lg:14px;
+            --radius-md:10px;
+            --shadow:0 10px 40px rgba(0,0,0,.55);
+        }
+
+        *{box-sizing:border-box;margin:0;padding:0;}
+
+
+        .edit-card{
+            padding:22px 20px 24px;
+            display:grid;
+            grid-template-columns:260px minmax(0,1fr);
+            gap:24px;
+        }
+
+        /* 좌측: 프로필 사진 */
+        .photo-section{
+            border-right:1px solid var(--line);
+            padding-right:20px;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            gap:16px;
+        }
+        .photo-preview{
+            width:210px;
+            height:280px;
+            border-radius:var(--radius-lg);
+            border:1px solid var(--line);
+            object-fit:cover;
+            background:#050608;
+        }
+        .photo-preview.drop-hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(124,92,255,.7);
+        }
+        .photo-actions{
+            display:flex;
+            justify-content:space-between;
+            gap:10px;
+            width:100%;
+        }
+        .photo-actions .pill-btn{
+            flex:1 1 0;
+        }
+        .photo-hint{
+            font-size:12px;
+            color:var(--muted);
+            text-align:center;
+            line-height:1.5;
+        }
+        .pill-btn{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:6px;
+            padding:7px 14px;
+            border-radius:999px;
+            border:1px solid var(--accent);
+            background:rgba(124,92,255,.18);
+            color:var(--text);
+            font-size:13px;
+            cursor:pointer;
+            transition:background .15s ease, transform .1s ease;
+        }
+        .pill-btn:hover{
+            background:rgba(124,92,255,.35);
+            transform:translateY(-1px);
+        }
+        .pill-btn input[type="file"]{ display:none; }
+
+        /* 우측: 폼 필드들 */
+        .form-section{
+            display:flex;
+            flex-direction:column;
+            gap:18px;
+        }
+
+        .field-group{
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+            margin-top: 18px;
+        }
+        .field-label{
+            font-size:13px;
+            font-weight:600;
+        }
+        .field-hint{
+            font-size:11px;
+            color:var(--muted);
+        }
+
+        .text-input,
+        .select-input{
+            width:100%;
+            padding:8px 10px;
+            border-radius:8px;
+            border:1px solid var(--line);
+            background:var(--panel-2);
+            color:var(--text);
+            font-size:14px;
+            outline:none;
+        }
+        .text-input:focus,
+        .select-input:focus{
+            border-color:var(--accent);
+            box-shadow:0 0 0 1px rgba(124,92,255,.35);
+        }
+
+        .two-col{
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:12px;
+        }
+
+        /* SNS 섹션 */
+        .sns-row{
+            display:grid;
+            grid-template-columns:120px minmax(0,1fr) 32px;
+            gap:8px;
+            align-items:center;
+        }
+        .sns-remove-btn{
+            width:28px;
+            height:28px;
+            border-radius:50%;
+            border:0;
+            background:rgba(255,255,255,.06);
+            color:var(--muted);
+            cursor:pointer;
+            font-size:15px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+        }
+        .sns-remove-btn:hover{
+            background:rgba(255,80,80,.2);
+            color:#ffb3b3;
+        }
+        .sns-add-btn{
+            margin-top:6px;
+            font-size:12px;
+            padding:5px 10px;
+            border-radius:999px;
+            border:0;
+            background:rgba(255,255,255,.08);
+            color:var(--text);
+            cursor:pointer;
+        }
+        .sns-add-btn:hover{ background:rgba(255,255,255,.16); }
+        .sns-list{
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            margin-top:4px;
+        }
+
+        /* 태그 섹션 */
+        .tag-edit-row{
+            display:flex;
+            gap:6px;
+            margin-top:6px;
+        }
+        .tag-input{ flex:1; }
+        .tag-add-btn{
+            font-size:12px;
+            padding:6px 12px;
+            border-radius:999px;
+            border:0;
+            background:rgba(255,255,255,.08);
+            color:var(--text);
+            cursor:pointer;
+        }
+        .tag-add-btn:hover{ background:rgba(255,255,255,.16); }
+        .tag-list{
+            display:flex;
+            flex-wrap:wrap;
+            gap:6px;
+            margin-top:4px;
+        }
+        .tag-chip{
+            padding:4px 10px;
+            border-radius:999px;
+            font-size:12px;
+            background:rgba(124,92,255,0.18);
+            border:1px solid rgba(124,92,255,0.6);
+            cursor:pointer;
+            cursor: grab;
+        }
+        .tag-chip:active{ cursor: grabbing; }
+        .tag-chip.dragging{ opacity: .5; }
+        .tag-chip:hover{ background:rgba(124,92,255,0.32); }
+
+        /* 하단 버튼 */
+        .form-actions{
+            margin-top:10px;
+            display:flex;
+            justify-content:flex-end;
+            gap:8px;
+        }
+        footer{
+            width:100%;
+            border-top:1px solid var(--line);
+            padding:18px 0 22px;
+            margin-top:auto;
+            text-align:center;
+            font-size:11px;
+            color:var(--muted);
+        }
+
+        @media (max-width:800px){
+            .edit-card{ grid-template-columns:1fr; }
+            .photo-section{
+                border-right:none;
+                border-bottom:1px solid var(--line);
+                padding-right:0;
+                padding-bottom:18px;
+            }
+        }
+    

@@ -1,0 +1,9 @@
+[hidden] { display: none !important; }
+.photo-card { margin: 0; cursor: default; }
+.photo-actions { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px; }
+.photo-actions button { font-size: 12px; padding: 5px 8px; }
+.photo-thumb { object-fit: contain; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+#gallery-status { color: var(--muted); font-size: 13px; min-height: 22px; }
+.gallery-toolbar { gap: 12px; flex-wrap: wrap; }
+.form-actions { flex-wrap: wrap; }

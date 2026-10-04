@@ -1,0 +1,507 @@
+const {app,BrowserWindow,dialog,shell} = require('electron');
+const http = require('node:http');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const net = require('node:net');
+const assert = require('node:assert/strict');
+const {execFileSync} = require('node:child_process');
+const {setTimeout:delay} = require('node:timers/promises');
+const {configuration} = require('../src/config.cjs');
+const {ApiProcess} = require('../src/api-process.cjs');
+const {createWindow} = require('../src/window.cjs');
+const directory = fs.mkdtempSync(path.join(os.tmpdir(),'onfilm-local-e2e-'));
+app.setPath('userData',path.join(directory,'electron'));
+// Keep the test runner alive between the first and second windows.
+app.on('window-all-closed', () => {});
+let backend;
+let window;
+async function waitFor(fn) {
+  const end = Date.now()+90000;
+  while (Date.now()<end) { try { if(await fn()) return; } catch {} await delay(100); }
+  throw new Error('Timed out waiting for UI');
+}
+async function launch() {
+  const listener=net.createServer();
+  await new Promise(resolve=>listener.listen(0,'127.0.0.1',resolve));
+  const port=listener.address().port;
+  await new Promise(resolve=>listener.close(resolve));
+  const config=configuration(path.join(directory,'한글 data'),{port,java:process.env.ONFILM_JAVA_PATH,jar:process.env.ONFILM_TEST_JAR});
+  config.env.LOGGING_LEVEL_ROOT='WARN';
+  backend=new ApiProcess(config);
+  window=createWindow({origin:config.origin,backend,token:config.env.ONFILM_TOKEN,dataDir:config.env.ONFILM_DATA_DIR,show:false,partition:`e2e-${port}`});
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('status')?.textContent === '저장된 프로필을 불러왔습니다.' || document.getElementById('viewStatus')?.textContent === '저장된 프로필입니다.'"));
+  return config;
+}
+async function close() { window?.destroy(); await backend?.stop(); }
+async function verifyStaticPortfolio(site) {
+  const requests=[];
+  let hideContact=false;
+  const server=http.createServer((req,res)=>{
+    try{
+      requests.push(req.url);const name=decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/^\//,'')||'index.html';
+      const file=path.resolve(site,name);if(!file.startsWith(site+path.sep)||!fs.statSync(file).isFile()){res.writeHead(404).end();return;}
+      const types={'.html':'text/html','.json':'application/json','.css':'text/css','.js':'text/javascript','.png':'image/png','.svg':'image/svg+xml','.ts':'video/mp2t','.m3u8':'application/vnd.apple.mpegurl'};
+      res.setHeader('Content-Type',types[path.extname(file)]||'text/plain');
+      if(hideContact&&name==='portfolio.json'){const data=JSON.parse(fs.readFileSync(file,'utf8'));data.profile.contact={};res.end(JSON.stringify(data));return;}
+      fs.createReadStream(file).pipe(res);
+    }catch{res.writeHead(404).end();}
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const origin='http://127.0.0.1:'+server.address().port;
+  const viewer=new BrowserWindow({show:false,width:1280,height:900,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,partition:'static-'+Date.now(),autoplayPolicy:'no-user-gesture-required'}});
+  viewer.webContents.session.webRequest.onBeforeRequest((details,cb)=>cb({cancel:details.url.startsWith('http')&&!details.url.startsWith(origin+'/')}));
+  try{
+    await viewer.loadURL(origin+'/index.html');
+    await waitFor(()=>viewer.webContents.executeJavaScript("document.getElementById('publicStatus')?.textContent === ''"));
+    assert.equal(await viewer.webContents.executeJavaScript("document.getElementById('profileName').textContent"),'배우 재시작 테스트');
+    assert.equal(await viewer.webContents.executeJavaScript("document.getElementById('contactEmailDisplay').textContent"),'actor@example.com');
+    assert.equal(await viewer.webContents.executeJavaScript("document.getElementById('contactPhoneDisplay')"),null);
+    assert.equal(await viewer.webContents.executeJavaScript("document.querySelectorAll('input,button[data-action],.profile-settings-btn').length"),0);
+    await waitFor(()=>viewer.webContents.executeJavaScript("[...document.querySelectorAll('#profilePhoto,.film-poster')].every(image=>image.complete&&image.naturalWidth>0)"));
+    await delay(300);
+    fs.writeFileSync(path.join(directory,'public-portfolio.png'),(await viewer.webContents.capturePage()).toPNG());
+    await viewer.webContents.executeJavaScript("document.querySelector('#filmSlider a').click()");
+    await waitFor(()=>viewer.webContents.executeJavaScript("document.getElementById('video')?.currentTime > 0.2"));
+    assert.ok(requests.some(url=>url.includes('segment-')));
+    assert.ok(requests.every(url=>!url.startsWith('/api/')));
+    await viewer.webContents.executeJavaScript("document.getElementById('backBtn').click()");
+    await waitFor(()=>viewer.webContents.executeJavaScript("document.getElementById('publicStatus')?.textContent === ''"));
+    hideContact=true;await viewer.loadURL(origin+'/index.html?emptyContact=1');
+    await waitFor(()=>viewer.webContents.executeJavaScript("document.getElementById('publicStatus')?.textContent === ''"));
+    assert.equal(await viewer.webContents.executeJavaScript("document.getElementById('contactSection').hidden"),true);
+  } finally {viewer.destroy();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+}
+async function pressKey(keyCode) {
+  window.webContents.sendInputEvent({type:'keyDown',keyCode});
+  window.webContents.sendInputEvent({type:'keyUp',keyCode});
+  await delay(100);
+}
+async function uploadVideo(name='연기 영상.mp4',valid=true) {
+  await window.webContents.executeJavaScript(`{
+    const bytes=new Uint8Array(1024*1024*7);bytes[3]=24;
+    if(${valid})bytes.set([102,116,121,112],4);
+    const transfer=new DataTransfer();transfer.items.add(new File([bytes],${JSON.stringify(name)},{type:'video/mp4'}));
+    const input=document.querySelector('.video-file-input');input.files=transfer.files;input.dispatchEvent(new Event('change'));
+  }`);
+}
+async function uploadThumbnail(width=4032,height=3024) {
+  await window.webContents.executeJavaScript(`new Promise(resolve=>{
+    const canvas=document.createElement('canvas');canvas.width=${width};canvas.height=${height};
+    canvas.getContext('2d').fillRect(0,0,canvas.width,canvas.height);
+    canvas.toBlob(blob=>{const transfer=new DataTransfer();transfer.items.add(new File([blob],'film.png',{type:'image/png'}));
+      const input=document.querySelector('.thumb-file-input');input.files=transfer.files;input.dispatchEvent(new Event('change'));resolve();},'image/png');
+  })`);
+}
+async function uploadPortrait(width=4032,height=3024,drop=false) {
+  await window.webContents.executeJavaScript(`new Promise(resolve=>{
+    const canvas=document.createElement('canvas');canvas.width=${width};canvas.height=${height};
+    canvas.getContext('2d').fillRect(0,0,canvas.width,canvas.height);
+    canvas.toBlob(blob=>{const transfer=new DataTransfer();transfer.items.add(new File([blob],'portrait.png',{type:'image/png'}));
+      if(${drop})document.getElementById('photoSection').dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));
+      else{const input=document.getElementById('profileFileInput');input.files=transfer.files;input.dispatchEvent(new Event('change'));}resolve();},'image/png');
+  })`);
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('photoStatus').textContent === '사진을 저장했습니다.'"));
+}
+app.whenReady().then(async()=>{
+  let config=await launch();
+  assert.equal((await fetch(`${config.origin}/api/profile`)).status,403);
+  const headers={'X-Onfilm-Token':config.env.ONFILM_TOKEN,'Content-Type':'application/json'};
+  assert.equal((await fetch(`${config.origin}/api/profile`,{headers:{...headers,Origin:'https://evil.example'}})).status,403);
+  assert.equal((await fetch(`${config.origin}/api/profile`,{method:'PUT',headers,body:JSON.stringify({name:' ',oneLineIntro:'',version:0})})).status,400);
+  console.log('PASS: unauthenticated, foreign origin and invalid profile rejected');
+  const globals=await window.webContents.executeJavaScript('({node:typeof require,process:typeof process,bridge:typeof onfilmDesktop})');
+  assert.deepEqual(globals,{node:'undefined',process:'undefined',bridge:'undefined'});
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('photoSection').hidden"),true);
+  assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('#contactPhone,#publicEmail,#publicPhone').length"),0);
+  await window.webContents.executeJavaScript("document.getElementById('contactEmail').value='actor@example.com'");
+  await window.webContents.executeJavaScript(`
+    document.getElementById('actorName').value='배우 재시작 테스트';
+    document.getElementById('bioInput').value='꺼도 남는 소개';
+    document.getElementById('birthYear').value='1995';
+    document.getElementById('birthMonth').value='01';
+    document.getElementById('birthDay').value='01';
+    document.getElementById('addSnsBtn').click();
+    document.querySelector('#snsList input').value='https://instagram.com/actor';
+    document.getElementById('tagInput').value='액션';
+    document.getElementById('addTagBtn').click();
+    document.getElementById('birthPlace').value='서울';
+    document.getElementById('editProfileForm').dispatchEvent(new Event('input',{bubbles:true}));
+    document.getElementById('editProfileForm').requestSubmit();
+  `);
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('viewStatus')?.textContent === '저장된 프로필입니다.'"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('profileName').textContent"), '배우 재시작 테스트');
+  assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('#filmographySection,#profilePhoto').length"), 2);
+  await waitFor(()=>window.webContents.executeJavaScript("!document.getElementById('galleryEmpty').classList.contains('hidden')"));
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('#filmEmpty .empty-cta-link').textContent"), '첫 작품 등록하기');
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('#galleryEmpty .empty-cta-link').textContent"), '첫 사진 등록하기');
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('profilePhoto').naturalWidth > 0"));
+  window.setSize(1280, 1400);
+  await delay(300);
+  fs.writeFileSync(path.join(directory,'profile-empty.png'), (await window.webContents.capturePage()).toPNG());
+  window.setSize(1280, 900);
+  console.log('PASS: actual Electron form saved into file H2');
+  await window.webContents.executeJavaScript("document.querySelector('#filmEmpty .empty-cta-link').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('addFilmBtn')?.disabled === false"));
+  await window.webContents.executeJavaScript(`
+    document.getElementById('addFilmBtn').click();
+    const title=document.querySelector('[data-field=title]');title.value='로컬 영화';title.dispatchEvent(new Event('input'));
+  `);
+  const addGenre=async(value,composing=false)=>window.webContents.executeJavaScript(`{
+    const input=document.querySelector('.genre-chip-input');input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true,isComposing:${composing}}));
+  }`);
+  const genreCount=()=>window.webContents.executeJavaScript("document.querySelectorAll('.genre-chip-box .chip').length");
+  await addGenre('   ');assert.equal(await genreCount(),0);
+  await addGenre('액션',true);assert.equal(await genreCount(),0);
+  await addGenre('액션');await addGenre(' 액션 ');assert.equal(await genreCount(),1);
+  await addGenre('드라마');assert.equal(await genreCount(),2);
+  assert.equal(new URL(window.webContents.getURL()).pathname,'/edit-filmography.html');
+  await addGenre('가'.repeat(31));assert.equal(await genreCount(),2);
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('.genre-status').textContent.includes('30자')"),true);
+  for(let i=0;i<8;i++)await addGenre('테스트'+i);
+  await addGenre('초과');assert.equal(await genreCount(),10);
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('.genre-status').textContent.includes('최대 10개')"),true);
+  await window.webContents.executeJavaScript("{for(let i=0;i<8;i++)document.querySelector('.genre-chip-box .chip:last-child button').click();const g=document.querySelector('.genre-chip-input');g.value='미확정';g.dispatchEvent(new Event('input'));document.getElementById('filmographyForm').requestSubmit();}");
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('filmStatus').textContent.includes('Enter로 추가')"),true);
+  await window.webContents.executeJavaScript("{const g=document.querySelector('.genre-chip-input');g.value='';g.dispatchEvent(new Event('input'));document.getElementById('filmographyForm').requestSubmit();}");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('#filmSlider .film-title')?.textContent === '로컬 영화'"));
+  await window.webContents.executeJavaScript("document.querySelector('#filmSlider .film-card').click()");
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('localNotice').open"),true);
+  await window.webContents.executeJavaScript("document.getElementById('noticeClose').click()");
+  assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('input[type=file]').length"), 0);
+  assert.equal((await fetch(`${config.origin}/api/profile`,{method:'PUT',headers,body:JSON.stringify({name:'stale',oneLineIntro:'',version:0})})).status,409);
+  await close();
+  config=await launch();
+  assert.equal(new URL(window.webContents.getURL()).pathname, '/profile.html');
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('#filmSlider .film-title')?.textContent === '로컬 영화'"));
+  await window.webContents.executeJavaScript("document.getElementById('profileSettingsBtn').click();document.querySelector('[data-action=filmography]').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('addFilmBtn')?.disabled === false"));
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('[data-field=title]').value"),'로컬 영화');
+  assert.deepEqual(await window.webContents.executeJavaScript("[...document.querySelectorAll('.genre-chip-box .chip > span:first-child')].map(el=>el.textContent)"),['액션','드라마']);
+  fs.writeFileSync(path.join(directory,'genre-chips.png'),(await window.webContents.capturePage()).toPNG());
+  console.log('PASS: genre Enter chips, IME guard, blank/duplicate/length/count checks, removal, pending-input guard and restart persistence');
+  await uploadThumbnail();
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.thumbnail-preview')?.naturalWidth === 2048 && document.getElementById('filmStatus').textContent === '섬네일을 저장했습니다.'"));
+  await window.webContents.executeJavaScript("const bad=new DataTransfer();bad.items.add(new File(['invalid'],'bad.png',{type:'image/png'}));const input=document.querySelector('.thumb-file-input');input.files=bad.files;input.dispatchEvent(new Event('change'))");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('filmStatus').textContent.includes('다시 읽기') && document.getElementById('saveFilms').disabled"));
+  await window.webContents.executeJavaScript("document.getElementById('reloadFilms').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('saveFilms')?.disabled === false && document.querySelector('.thumbnail-preview')?.naturalWidth === 2048"));
+  fs.writeFileSync(path.join(directory,'filmography-editor.png'), (await window.webContents.capturePage()).toPNG());
+  await uploadVideo();
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.video-info')?.textContent.includes('연기 영상.mp4') && !document.getElementById('saveFilms').disabled"));
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.encoding-start')?.disabled === false"));
+  await window.webContents.executeJavaScript("document.querySelector('.encoding-start').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.encoding-state')?.textContent.includes('인코딩 실패')"));
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('.encoding-start').textContent"),'인코딩 재시도');
+  await uploadVideo('잘못된 영상.mp4',false);
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('filmStatus').textContent.includes('다시 읽기') && document.getElementById('saveFilms').disabled"));
+  await window.webContents.executeJavaScript("document.getElementById('reloadFilms').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.video-info')?.textContent.includes('연기 영상.mp4') && !document.getElementById('saveFilms').disabled"));
+  await window.webContents.executeJavaScript(`
+    document.getElementById('addFilmBtn').click();
+    const title=document.querySelector('#filmList article:last-child [data-field=title]');title.value='두 번째 영화';title.dispatchEvent(new Event('input'));
+    document.querySelector('#filmList article:last-child .film-card-actions button').click();
+    window.originalFetch=window.fetch;
+    window.fetch=async(...args)=>{const response=await window.originalFetch(...args);if(args[1]?.method==='PUT')throw new Error('lost response after commit');return response;};
+    document.getElementById('filmographyForm').requestSubmit();
+  `);
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('filmStatus')?.textContent.includes('응답이 유실')"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('saveFilms').disabled"),true);
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('[data-field=title]').value"),'두 번째 영화');
+  await window.webContents.executeJavaScript("window.fetch=window.originalFetch;window.confirm=()=>true;document.getElementById('reloadFilms').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('saveFilms')?.disabled === false"));
+  assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('#filmList article').length"),2);
+  await window.webContents.executeJavaScript("document.getElementById('filmographyForm').requestSubmit()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('#filmSlider .film-title')?.textContent === '두 번째 영화'"));
+  await window.webContents.executeJavaScript("document.getElementById('profileSettingsBtn').click();document.querySelector('[data-action=filmography]').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('addFilmBtn')?.disabled === false"));
+  await window.webContents.executeJavaScript("window.confirm=()=>true;document.querySelector('.delete-film-btn').click();document.getElementById('filmographyForm').requestSubmit()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('#filmSlider .film-title')?.textContent === '로컬 영화'"));
+  assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('#filmSlider .film-card').length"),1);
+  console.log('PASS: filmography creation, restart, ordering, deletion and lost-response recovery without duplication');
+  await window.webContents.executeJavaScript("document.getElementById('profileSettingsBtn').click();document.getElementById('editProfileLink').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('status')?.textContent === '저장된 프로필을 불러왔습니다.'"));
+  const saved=await window.webContents.executeJavaScript("({name:document.getElementById('actorName').value,intro:document.getElementById('bioInput').value})");
+  assert.deepEqual(saved,{name:'배우 재시작 테스트',intro:'꺼도 남는 소개'});
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('birthYear').value"), '1995');
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('birthPlace').value"), '서울');
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('#snsList input').value"), 'https://instagram.com/actor');
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('#tagList button').textContent"), '#액션');
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('contactEmail').value"),'actor@example.com');
+  assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('#contactPhone,#publicEmail,#publicPhone').length"),0);
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('photoSection').hidden"),false);
+  await window.webContents.executeJavaScript("document.getElementById('bioInput').value='사진 변경 중 초안';document.getElementById('editProfileForm').dispatchEvent(new Event('input',{bubbles:true}))");
+  await uploadPortrait();
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('profilePreview').naturalWidth===2048"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('bioInput').value"),'사진 변경 중 초안');
+  await uploadPortrait(800,1000,true);
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('profilePreview').naturalWidth===800"));
+  fs.writeFileSync(path.join(directory,'profile-edit-portrait.png'),(await window.webContents.capturePage()).toPNG());
+  await window.webContents.executeJavaScript("{const transfer=new DataTransfer();transfer.items.add(new File(['invalid'],'bad.png',{type:'image/png'}));const input=document.getElementById('profileFileInput');input.files=transfer.files;input.dispatchEvent(new Event('change'));}");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('photoStatus').textContent.includes('처리 결과')"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('fields').disabled"),true);
+  await window.webContents.executeJavaScript("window.confirm=()=>true;document.getElementById('reload').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("!document.getElementById('fields').disabled"));
+  await window.webContents.executeJavaScript("document.getElementById('deleteProfileBtn').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('photoStatus').textContent==='사진을 삭제했습니다.'"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('deleteProfileBtn').disabled"),true);
+  await uploadPortrait(800,1000);
+  console.log('PASS: original portrait column, selection/drop/resize/replacement/deletion, draft preservation and failed-upload recovery');
+  console.log('PASS: original-style profile form, SNS and tags survive restart');
+  await window.webContents.executeJavaScript("document.getElementById('bioInput').value='수정 후 소개';document.getElementById('editProfileForm').dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('editProfileForm').requestSubmit()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('bioDisplay')?.textContent === '수정 후 소개'"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('contactEmailDisplay').textContent"),'actor@example.com');
+  await window.webContents.executeJavaScript("window.contactFetch=window.fetch;window.fetch=async(...args)=>{const res=await window.contactFetch(...args);if(String(args[0])==='/api/profile'){const data=await res.json();data.contact={email:''};return new Response(JSON.stringify(data));}return res;};document.getElementById('retryProfile').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('contactSection').hidden"));
+  await window.webContents.executeJavaScript("window.fetch=window.contactFetch;document.getElementById('retryProfile').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("!document.getElementById('contactSection').hidden"));
+  // Simulate a failed read; it must show a retry instead of treating it as an empty profile.
+  await window.webContents.executeJavaScript("window.originalFetch=window.fetch;window.fetch=async()=>{throw new Error('offline')};document.getElementById('retryProfile').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("!document.getElementById('retryProfile').hidden"));
+  await window.webContents.executeJavaScript("window.fetch=window.originalFetch;document.getElementById('retryProfile').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('viewStatus').textContent === '저장된 프로필입니다.'"));
+  console.log('PASS: initial save, startup routing, edit-save-view and load failure retry');
+  await window.webContents.executeJavaScript("document.querySelector('#galleryEmpty .empty-cta-link').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('gallery-status')?.textContent === '갤러리를 불러왔습니다.'"));
+  await window.webContents.executeJavaScript(`new Promise(resolve => {
+    const canvas=document.createElement('canvas'); canvas.width=4032; canvas.height=3024;
+    canvas.toBlob(blob => {
+      const transfer=new DataTransfer();
+      transfer.items.add(new File([blob], 'one.png', {type:'image/png'}));
+      transfer.items.add(new File([blob], 'two.png', {type:'image/png'}));
+      document.getElementById('gallery-files').files=transfer.files;
+      document.getElementById('gallery-files').dispatchEvent(new Event('change')); resolve();
+    });
+  })`);
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('gallery-status').textContent === '2장을 저장했습니다.'"));
+  await waitFor(()=>window.webContents.executeJavaScript("[...document.querySelectorAll('#gallery img')].every(img=>img.naturalWidth===2048 && img.naturalHeight===1536)"));
+  const order = await window.webContents.executeJavaScript("[...document.querySelectorAll('#gallery img')].map(img=>new URL(img.src).pathname).reverse()");
+  await window.webContents.executeJavaScript("document.querySelector('#gallery figure').querySelectorAll('button')[1].click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('gallery-status').textContent === '갤러리를 저장했습니다.'"));
+  // A bad image leaves earlier saves intact and blocks mutation until a reload.
+  await window.webContents.executeJavaScript("const t=new DataTransfer(); t.items.add(new File(['invalid'],'bad.png',{type:'image/png'})); document.getElementById('gallery-files').files=t.files;document.getElementById('gallery-files').dispatchEvent(new Event('change'))");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('gallery-status').textContent.includes('업로드를 중단')"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('gallery-status').textContent.includes('JPEG 또는 PNG')"), true);
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('browseBtn').disabled"), true);
+  await window.webContents.executeJavaScript("document.getElementById('gallery-reload').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('gallery-status').textContent === '갤러리를 불러왔습니다.'"));
+  await close(); config=await launch();
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('profilePhoto')?.naturalWidth===800"));
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('#filmSlider .film-poster')?.naturalWidth === 2048"));
+  await window.webContents.executeJavaScript("document.getElementById('profileSettingsBtn').click();document.querySelector('[data-action=filmography]').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('saveFilms')?.disabled === false"));
+  await uploadThumbnail(800,600);
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('.video-info').textContent.includes('연기 영상.mp4')"),true);
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.thumbnail-preview')?.naturalWidth === 800 && document.getElementById('filmStatus').textContent === '섬네일을 저장했습니다.'"));
+  await window.webContents.executeJavaScript("window.confirm=()=>true;document.querySelector('.thumb-dropzone .delete-film-btn').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('filmStatus').textContent === '섬네일을 삭제했습니다.'"));
+  assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('.thumbnail-preview').length"),0);
+  await uploadVideo('교체 영상.mov');
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.video-info')?.textContent.includes('교체 영상.mov') && !document.getElementById('saveFilms').disabled"));
+  fs.writeFileSync(path.join(directory,'video-editor.png'), (await window.webContents.capturePage()).toPNG());
+  const realVideo=path.join(directory,'encoding-fixture.mp4');
+  execFileSync(process.env.ONFILM_FFMPEG || 'ffmpeg',['-nostdin','-v','error','-f','lavfi','-i','testsrc=size=160x120:rate=10','-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-t','12','-c:v','libx264','-threads','1','-pix_fmt','yuv420p','-c:a','aac',realVideo],{timeout:20000});
+  const realBytes=fs.readFileSync(realVideo).toString('base64');
+  await window.webContents.executeJavaScript(`{
+    const bytes=Uint8Array.from(atob(${JSON.stringify(realBytes)}),c=>c.charCodeAt(0));
+    const files=new DataTransfer();files.items.add(new File([bytes],'실제 영상.mp4',{type:'video/mp4'}));
+    const input=document.querySelector('.video-file-input');input.files=files.files;input.dispatchEvent(new Event('change'));
+  }`);
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.video-info')?.textContent.includes('실제 영상.mp4') && document.querySelector('.encoding-start')?.disabled === false"));
+  await window.webContents.executeJavaScript("document.querySelector('.encoding-start').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.encoding-state')?.textContent.includes('HLS 변환 완료')"));
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('.encoding-start').disabled"),true);
+  fs.writeFileSync(path.join(directory,'encoding-complete.png'), (await window.webContents.capturePage()).toPNG());
+  console.log('PASS: invalid-video failure and real FFmpeg HLS encoding through Electron');
+  const playbackVideoId=await window.webContents.executeJavaScript("document.querySelector('.encoding-watch').dataset.videoId");
+  await window.webContents.executeJavaScript("document.querySelector('.encoding-watch').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video')?.readyState >= 2 && document.getElementById('playerStatus').hidden"));
+  const playerUrl=window.webContents.getURL();
+  assert.ok(await window.webContents.executeJavaScript("document.getElementById('video').duration >= 11"));
+  assert.equal((await fetch(config.origin+'/api/videos/'+playbackVideoId+'/hls/index.m3u8')).status,403);
+  const ranged=await window.webContents.executeJavaScript(`(async()=>{const r=await fetch('/api/videos/${playbackVideoId}/hls/segment-00000.ts',{headers:{Range:'bytes=0-99'}});return {status:r.status,size:(await r.arrayBuffer()).byteLength,type:r.headers.get('content-type')};})()`);
+  assert.deepEqual(ranged,{status:206,size:100,type:'video/mp2t'});
+  // Opening the player starts audible playback without a second click.
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').currentTime > 0.3 && !document.getElementById('video').paused"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').muted"),false);
+  await pressKey('Space');
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').paused"),true);
+  await pressKey('Space');
+  await waitFor(()=>window.webContents.executeJavaScript("!document.getElementById('video').paused"));
+  await pressKey('Space');
+  await pressKey('Right');
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').currentTime >= 5 && !document.getElementById('video').seeking"));
+  await pressKey('Left');
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').currentTime < 2 && !document.getElementById('video').seeking"));
+  await pressKey('M');assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').muted"),true);
+  await pressKey('M');assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').muted"),false);
+  await pressKey('Down');assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').volume"),0.95);
+  await pressKey('Up');assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').volume"),1);
+  await pressKey('F');
+  await waitFor(()=>window.webContents.executeJavaScript("document.fullscreenElement !== null"));
+  await pressKey('F');
+  await waitFor(()=>window.webContents.executeJavaScript("document.fullscreenElement === null"));
+  const previewPosition=await window.webContents.executeJavaScript("document.getElementById('video').currentTime");
+  await window.webContents.executeJavaScript("{const t=document.getElementById('timeline'),r=t.getBoundingClientRect();t.dispatchEvent(new PointerEvent('pointermove',{clientX:r.left+r.width*0.5}));}");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('timelinePreview').classList.contains('ready') && document.getElementById('previewVideo').currentTime > 5"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('previewVideo').muted && document.getElementById('previewVideo').paused"),true);
+  await window.webContents.executeJavaScript("{const t=document.getElementById('timeline'),r=t.getBoundingClientRect();for(const ratio of [.1,.9,.3,.8])t.dispatchEvent(new PointerEvent('pointermove',{clientX:r.left+r.width*ratio}));}");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('timelinePreview').classList.contains('ready') && Math.abs(document.getElementById('previewVideo').currentTime-9.6)<0.2"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').currentTime"),previewPosition);
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').paused"),true);
+  fs.writeFileSync(path.join(directory,'timeline-preview.png'),(await window.webContents.capturePage()).toPNG());
+  await window.webContents.executeJavaScript("document.getElementById('timeline').dispatchEvent(new PointerEvent('pointerleave'))");
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('timelinePreview').hidden"),true);
+  // Focused control handles Space once; bubbling must not toggle it a second time.
+  await window.webContents.executeJavaScript("document.getElementById('playPause').focus()");
+  await pressKey('Space');assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').paused"),false);
+  await pressKey('Space');assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').paused"),true);
+  await window.webContents.executeJavaScript("document.activeElement.blur();document.getElementById('forward10').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').currentTime >= 10 && !document.getElementById('video').seeking"));
+  await window.webContents.executeJavaScript("document.querySelector('[data-speed=\"1.5\"]').click()");
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').playbackRate"),1.5);
+  await window.webContents.executeJavaScript("document.getElementById('back10').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').currentTime < 2 && !document.getElementById('video').seeking"));
+  fs.writeFileSync(path.join(directory,'video-player.png'), (await window.webContents.capturePage()).toPNG());
+  await window.webContents.executeJavaScript("document.getElementById('backBtn').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('#filmSlider .film-card') !== null"));
+  const cardBefore=await window.webContents.executeJavaScript("{const c=document.querySelector('#filmSlider .film-card'),r=c.getBoundingClientRect();({border:getComputedStyle(c).borderColor,x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)})}");
+  window.webContents.sendInputEvent({type:'mouseMove',x:cardBefore.x,y:cardBefore.y});await delay(200);
+  assert.equal(await window.webContents.executeJavaScript("getComputedStyle(document.querySelector('#filmSlider .film-card')).borderColor"),cardBefore.border);
+  await window.webContents.executeJavaScript("document.querySelector('#filmSlider .film-card').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video')?.readyState >= 2 && !document.getElementById('video').paused"));
+  console.log('PASS: audible autoplay from editor/card, Space/arrow/mute/volume keys, isolated hover preview, no colored hover border');
+  // Missing result is recoverable. Move only our test-generated manifest and restore it.
+  const completed=await window.webContents.executeJavaScript(`fetch('/api/encoding').then(r=>r.json()).then(j=>j.find(x=>x.videoId==='${playbackVideoId}'))`);
+  const manifest=path.join(directory,'한글 data','media','encoded',completed.id,'attempt-'+completed.attempts,'index.m3u8');
+  fs.renameSync(manifest,manifest+'.test-backup');
+  try {
+    await window.loadURL(playerUrl);
+    await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('retryPlayback')?.hidden === false"));
+    assert.equal(await window.webContents.executeJavaScript("document.getElementById('playerMessage').textContent.includes('재생 가능한 영상이 없습니다')"),true);
+  } finally { fs.renameSync(manifest+'.test-backup',manifest); }
+  await window.webContents.executeJavaScript("document.getElementById('retryPlayback').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').readyState >= 2 && document.getElementById('playerStatus').hidden"));
+  await window.webContents.executeJavaScript("document.getElementById('backBtn').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('viewStatus')?.textContent === '저장된 프로필입니다.'"));
+  await window.webContents.executeJavaScript("document.getElementById('profileSettingsBtn').click();document.querySelector('[data-action=filmography]').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('saveFilms')?.disabled === false"));
+  console.log('PASS: local HLS playback, protected segment Range, 10-second seek across segments, speed, profile entry and missing-file retry');
+  await window.webContents.executeJavaScript("document.querySelector('.back-link').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('viewStatus')?.textContent === '저장된 프로필입니다.'"));
+  await window.webContents.executeJavaScript("document.getElementById('profileSettingsBtn').click();document.getElementById('exportLink').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('exportStatus')?.textContent.includes('아직 만든')"));
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('createExport').disabled"),true);
+  await window.webContents.executeJavaScript("document.getElementById('confirmExport').click();document.getElementById('createExport').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('#exportsList a').length === 1"));
+  const exported=await window.webContents.executeJavaScript("fetch('/api/exports').then(r=>r.json())");
+  const copy=exported.items[0],site=path.join(exported.directory,copy.id,'site');
+  const contactData=JSON.parse(fs.readFileSync(path.join(site,'portfolio.json'),'utf8'));
+  assert.deepEqual(contactData.profile.contact,{email:'actor@example.com'});
+  const originalSave=dialog.showSaveDialog,originalOpen=shell.openPath;
+  try{
+    dialog.showSaveDialog=async()=>({canceled:true});
+    assert.equal((await window.webContents.executeJavaScript(`onfilmExports.saveZip('${copy.id}')`)).status,'cancelled');
+    const destination=path.join(directory,'공개 포트폴리오.zip');
+    dialog.showSaveDialog=async()=>({canceled:false,filePath:destination});
+    assert.equal((await window.webContents.executeJavaScript(`onfilmExports.saveZip('${copy.id}')`)).status,'saved');
+    assert.deepEqual(fs.readFileSync(destination),fs.readFileSync(path.join(exported.directory,copy.id,'portfolio.zip')));
+    assert.equal((await window.webContents.executeJavaScript(`onfilmExports.saveZip('${copy.id}')`)).status,'error');
+    let opened; shell.openPath=async value=>{opened=value;return '';};
+    assert.equal((await window.webContents.executeJavaScript(`onfilmExports.openFolder('${copy.id}')`)).status,'opened');
+    assert.equal(opened,fs.realpathSync(site));
+    console.log('PASS: native export ZIP, cancel, existing-file protection and folder target');
+  }finally{dialog.showSaveDialog=originalSave;shell.openPath=originalOpen;}
+  assert.ok(site.startsWith(directory+path.sep));
+  const publicJson=fs.readFileSync(path.join(site,'portfolio.json'),'utf8');
+  assert.ok(!publicJson.includes(playbackVideoId)&&!publicJson.includes('실제 영상.mp4')&&!publicJson.includes(directory));
+  assert.ok(copy.bytes>0&&copy.fileCount>20);
+  await window.webContents.executeJavaScript("document.querySelector('#exportsList a').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('publicStatus')?.textContent === ''"));
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('.local-preview-exit').textContent"),'로컬 미리보기 종료');
+  await verifyStaticPortfolio(site);
+  await window.webContents.executeJavaScript("document.querySelector('.local-preview-exit').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('#exportsList a').length === 1"));
+  await window.webContents.executeJavaScript("document.getElementById('readStorage').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('storageStatus').textContent.includes('합계:')"));
+  const originalTrash=shell.trashItem,originalMessage=dialog.showMessageBox;
+  try{
+    dialog.showMessageBox=async()=>({response:0});
+    await window.webContents.executeJavaScript("document.querySelector('[data-action=trash]').click()");
+    await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('exportStatus').textContent==='작업을 취소했습니다.'"));
+    assert.ok(fs.existsSync(site));
+    dialog.showMessageBox=async()=>({response:1});
+    shell.trashItem=async folder=>{assert.equal(folder,fs.realpathSync(path.dirname(site)));fs.renameSync(folder,path.join(directory,'test-trash'));};
+    await window.webContents.executeJavaScript("document.querySelector('[data-action=trash]').click()");
+    await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('exportStatus').textContent.includes('휴지통으로 이동했습니다.')"));
+    assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('#exportsList a').length"),0);
+    assert.ok(fs.existsSync(path.join(directory,'test-trash/site/index.html')));
+    assert.ok(fs.existsSync(path.join(directory,'공개 포트폴리오.zip')));
+    console.log('PASS: storage usage, cancelled cleanup and selected export-only recoverable move (OS trash mocked)');
+  }finally{shell.trashItem=originalTrash;dialog.showMessageBox=originalMessage;}
+  await window.webContents.executeJavaScript("document.querySelector('.back-link').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('viewStatus')?.textContent === '저장된 프로필입니다.'"));
+  await window.webContents.executeJavaScript("document.getElementById('profileSettingsBtn').click();document.querySelector('[data-action=filmography]').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('saveFilms')?.disabled === false"));
+  console.log('PASS: explicit export confirmation, file count/size, protected preview and independent static-host profile/HLS playback without local API');
+  await window.webContents.executeJavaScript("window.confirm=()=>true;void 0");
+  await window.webContents.executeJavaScript("document.querySelector('.video-dropzone button.ghost-btn').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('filmStatus').textContent.includes('영상 연결을 해제했습니다.')"));
+  assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('.video-info').length"),0);
+  assert.equal(await window.webContents.executeJavaScript(`fetch('/api/videos/${playbackVideoId}/hls/index.m3u8').then(r=>r.status)`),404);
+  console.log('PASS: streamed 7MB video selection, invalid file recovery, metadata preservation, restart, replacement and unlink (container fixture, not playback)');
+  await window.webContents.executeJavaScript("document.querySelector('.back-link').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('viewStatus')?.textContent === '저장된 프로필입니다.'"));
+  console.log('PASS: thumbnail auto-resize, invalid image recovery, metadata preservation, restart, replacement and deletion');
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('#galleryGrid img').length === 2"));
+  assert.deepEqual(await window.webContents.executeJavaScript("[...document.querySelectorAll('#galleryGrid img')].map(img=>new URL(img.src).pathname)"), order);
+  await window.webContents.executeJavaScript("document.getElementById('profileSettingsBtn').click();document.getElementById('editGalleryLink').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('#gallery figure').length === 2"));
+  await window.webContents.executeJavaScript("window.confirm=()=>true; document.querySelector('#gallery figure').querySelectorAll('button')[2].click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('#gallery figure').length === 1"));
+  await window.webContents.executeJavaScript("document.querySelector('.back-link').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('#galleryGrid img').length === 1"));
+  console.log('PASS: separate original-style gallery editor, upload, reorder, rejection recovery, restart and delete');
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('galleryEmpty').classList.contains('hidden')"), true);
+  await window.webContents.executeJavaScript("document.querySelector('#galleryGrid .gallery-item-wrap').click()");
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('lightbox').hidden"), false);
+  await window.webContents.executeJavaScript("document.getElementById('closeLightbox').click()");
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('lightbox').hidden"), true);
+  console.log('PASS: original profile structure, empty CTA, settings overlay and photo lightbox');
+  fs.writeFileSync(path.join(directory,'profile.png'), (await window.webContents.capturePage()).toPNG());
+  const before=window.webContents.getURL();
+  await window.webContents.executeJavaScript("location.href='https://example.com'");
+  await delay(200); assert.equal(window.webContents.getURL(),before);
+  console.log('PASS: new Java process and new Electron window reloaded saved profile; external navigation blocked');
+  await window.webContents.executeJavaScript("document.getElementById('profileSettingsBtn').click();document.getElementById('backupLink').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("typeof window.onfilmBackup==='object'"));
+  fs.writeFileSync(path.join(directory,'backup-screen.png'),(await window.webContents.capturePage()).toPNG());
+  const nativeOpen=dialog.showOpenDialog,nativeConfirm=dialog.showMessageBox;
+  const backupParent=path.join(directory,'백업 보관');fs.mkdirSync(backupParent);
+  try{
+    dialog.showOpenDialog=async()=>({canceled:true,filePaths:[]});
+    assert.equal((await window.webContents.executeJavaScript('onfilmBackup.create()')).status,'cancelled');
+    dialog.showOpenDialog=async()=>({canceled:false,filePaths:[backupParent]});
+    const savedBackup=await window.webContents.executeJavaScript('onfilmBackup.create()');
+    assert.equal(savedBackup.status,'saved',savedBackup.message);
+    const snapshot=JSON.parse(fs.readFileSync(path.join(savedBackup.location,'onfilm-backup.json'),'utf8'));
+    assert.ok(snapshot.files.some(f=>f.path==='database/onfilm.mv.db'));
+    assert.ok(snapshot.files.some(f=>f.path.startsWith('media/videos/')));
+    assert.ok(snapshot.files.some(f=>f.path.endsWith('index.m3u8')));
+    const updateResult=await window.webContents.executeJavaScript("(async()=>{const data=await (await fetch('/api/profile')).json();data.name='백업 이후 변경';return (await fetch('/api/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).status;})()");
+    assert.equal(updateResult,200);
+    dialog.showOpenDialog=async()=>({canceled:false,filePaths:[savedBackup.location]});
+    dialog.showMessageBox=async()=>({response:0});assert.equal((await window.webContents.executeJavaScript('onfilmBackup.restore()')).status,'cancelled');
+    dialog.showMessageBox=async()=>({response:1});
+    const restored=await window.webContents.executeJavaScript('onfilmBackup.restore()');assert.equal(restored.status,'restored',restored.message);
+    assert.ok(fs.existsSync(path.join(restored.location,'database','onfilm.mv.db')));
+    assert.equal(await window.webContents.executeJavaScript("fetch('/api/profile').then(r=>r.json()).then(p=>p.name)"),'배우 재시작 테스트');
+    await window.webContents.executeJavaScript("document.getElementById('back').click()");
+    await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('profilePhoto')?.naturalWidth===800"));
+    await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('#galleryGrid img').length===1"));
+    console.log('PASS: native backup/restore IPC, real stopped H2 snapshot, media hashes, cancellation, restart and previous-data preservation');
+  }finally{dialog.showOpenDialog=nativeOpen;dialog.showMessageBox=nativeConfirm;}
+}).then(async()=>{await close();console.log(`Test-only data: ${directory}`);app.exit(0);},async(error)=>{
+  console.error(error);await close();console.log(`Test-only data: ${directory}`);app.exit(1);
+});

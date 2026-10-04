@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnFilm 포트폴리오</title>
+<link rel="stylesheet" href="css/common.css"><link rel="stylesheet" href="css/actor-detail.css"><link rel="stylesheet" href="css/local-detail.css"><link rel="stylesheet" href="public.css">
+<script src="public-profile.js" defer></script></head><body>
+<div class="page-root"><header><div class="container header-row"><a href="index.html" class="logo">OnFilm</a></div></header>
+<main class="container"><p id="publicStatus" role="status">포트폴리오를 불러오는 중입니다.</p>
+<div class="profile-header"><img id="profilePhoto" class="profile-photo" src="images/profile-placeholder.png" alt="프로필 사진">
+<div class="profile-info"><div class="profile-title-row"><h1 id="profileName"></h1></div><div class="meta" id="profileMeta"></div><p class="bio" id="bioDisplay"></p><div class="sns-row" id="snsRow"></div>
+<section id="contactSection" class="profile-tag-section" hidden><div class="profile-tag-title">CONTACT ME</div><p id="contactEmailDisplay"></p></section>
+<section class="profile-tag-section"><div class="profile-tag-title">PROFILE TAGS</div><div class="profile-tag-list" id="tagList"></div></section></div></div>
+<section class="filmography-section"><h2>FILMOGRAPHY</h2><p id="filmEmpty" hidden>게시물 없음</p><div class="film-slider-container"><button id="filmPrevBtn" class="film-arrow left" aria-label="이전 작품">‹</button><div class="film-slider-wrapper"><div class="film-slider" id="filmSlider"></div></div><button id="filmNextBtn" class="film-arrow right" aria-label="다음 작품">›</button></div></section>
+<section class="gallery-section"><h2>PHOTO</h2><p id="photoEmpty" hidden>게시물 없음</p><div class="gallery-grid" id="galleryGrid"></div></section>
+</main><footer>OnFilm · Actor Portfolio</footer></div>
+<dialog id="details"><h2 id="detailsTitle"></h2><p id="detailsText"></p><button id="detailsClose" type="button">닫기</button></dialog>
+<dialog id="photoDialog"><img id="largePhoto" alt="사진 크게 보기"><button id="photoClose" type="button">닫기</button></dialog>
+</body></html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>프로필 입력 – OnFilm Local</title>
+<link rel="stylesheet" href="/css/common.css"><link rel="stylesheet" href="/css/edit-profile.css"><link rel="stylesheet" href="/css/local-profile.css">
+<script src="/app.js" defer></script>
+</head>
+<body class="ui-body">
+<div class="page-shell centered">
+<header class="top-header"><div class="header-inner page-inner"><strong>OnFilm <small>LOCAL</small></strong><div class="header-title">프로필 입력</div><a id="backToProfile" href="/profile.html" hidden>← 프로필로 돌아가기</a></div></header>
+<main class="page-main">
+<section class="edit-card card-surface" id="profileCard">
+<section class="photo-section" id="photoSection" hidden>
+<button type="button" id="chooseProfilePhoto" class="photo-select" aria-label="프로필 사진 선택" disabled><img id="profilePreview" class="photo-preview" src="/images/profile-placeholder.png" alt="프로필 사진 미리보기"></button>
+<div class="photo-actions"><button type="button" class="pill-btn" id="selectProfileBtn" disabled>사진 선택</button><button type="button" class="pill-btn" id="deleteProfileBtn" disabled>사진 삭제</button></div>
+<input type="file" id="profileFileInput" accept="image/jpeg,image/png" hidden disabled>
+<p class="photo-hint">4:5 비율의 선명한 정면 사진을 권장해요.<br>JPG, PNG, 최대 5MB · 클릭 또는 드래그 앤 드롭<br>큰 사진은 긴 변 2,048px로 자동 축소합니다.<br>사진 선택·삭제는 즉시 저장됩니다.</p>
+<p id="photoStatus" class="photo-hint" role="status" aria-live="polite"></p>
+</section><section class="form-section">
+<h1>나의 프로필</h1><p class="field-hint">기본 프로필부터 입력해 주세요. 이 PC에만 저장되며 온라인에 공개되지 않습니다.</p>
+<form id="editProfileForm"><fieldset id="fields" disabled>
+<div class="field-group"><label for="actorName" class="field-label">이름</label><input id="actorName" class="text-input" maxlength="60" required placeholder="이름 또는 예명"></div>
+<div class="two-col">
+<div class="field-group"><label for="birthYear" class="field-label">출생일 (선택)</label><div class="birth-row">
+<input id="birthYear" class="text-input" inputmode="numeric" maxlength="4" placeholder="YYYY" aria-label="출생 연도"><span>년</span>
+<input id="birthMonth" class="text-input" inputmode="numeric" maxlength="2" placeholder="MM" aria-label="출생 월"><span>월</span>
+<input id="birthDay" class="text-input" inputmode="numeric" maxlength="2" placeholder="DD" aria-label="출생 일"><span>일</span>
+</div></div>
+<div class="field-group"><label for="birthPlace" class="field-label">출생</label><input id="birthPlace" class="text-input" maxlength="100" placeholder="예) 서울, 부산, 인천"></div>
+</div>
+<div class="field-group"><label for="bioInput" class="field-label">소개글</label><textarea id="bioInput" class="text-input" maxlength="120" rows="4" placeholder="배우로서의 나를 소개해 주세요."></textarea><span class="field-hint">최대 120자</span></div>
+<div class="field-group"><div class="field-label">SNS 링크</div><div class="field-hint">인스타그램, 유튜브, 틱톡 등 최대 10개</div><div id="snsList" class="sns-list"></div><button type="button" id="addSnsBtn" class="sns-add-btn">+ SNS 추가</button></div>
+<div class="field-group"><div class="field-label">PROFILE TAGS</div><div id="tagList" class="tag-list"></div><div class="tag-edit-row"><input id="tagInput" class="text-input tag-input" maxlength="30" placeholder="자유롭게 입력해 주세요." aria-label="프로필 태그"><button type="button" id="addTagBtn" class="tag-add-btn">추가</button></div><div class="field-hint">태그당 30자, 최대 20개. 클릭하면 삭제됩니다.</div></div>
+<div class="field-group"><div class="field-label">CONTACT ME (선택)</div>
+<label for="contactEmail">이메일</label><input id="contactEmail" class="text-input" type="email" maxlength="254" placeholder="actor@example.com">
+<p class="field-hint">입력한 이메일은 프로필과 새 공개본에 표시됩니다. 비워 두면 CONTACT ME가 표시되지 않습니다. 기존 ZIP·공개본이나 게시된 사이트는 자동 변경되지 않습니다.</p>
+</div>
+<div class="form-actions"><button id="save" type="submit" class="primary-btn">저장</button></div>
+</fieldset></form>
+<button id="reload" class="ghost-btn" type="button">저장된 내용 다시 읽기</button>
+<a href="/backup.html">데이터 백업 · 복원</a>
+<p id="status" role="status" aria-live="polite">프로필을 불러오는 중입니다.</p>
+</section></section>
+</main><footer>© 2026 OnFilm · Local Portfolio</footer>
+</div></body></html>

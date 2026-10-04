@@ -1,0 +1,32 @@
+spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+  application:
+    name: onfilm-local
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    validate-migration-naming: true
+  sql:
+    init:
+      mode: never
+  h2:
+    console:
+      enabled: false
+  lifecycle:
+    timeout-per-shutdown-phase: 5s
+server:
+  address: 127.0.0.1
+  port: ${ONFILM_PORT:18765}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+onfilm:
+  ffmpeg: ${ONFILM_FFMPEG:ffmpeg}
+  ffprobe: ${ONFILM_FFPROBE:ffprobe}
+  data-dir: ${ONFILM_DATA_DIR}
+  token: ${ONFILM_TOKEN}
+  instance-id: ${ONFILM_INSTANCE_ID}

@@ -1,0 +1,20 @@
+/* Keep original actor-detail layout; only local/offline and accessibility overrides. */
+[hidden], .hidden { display: none !important; }
+.local-status { color: var(--muted); font-size: 13px; }
+.local-status:empty { display:none; }
+.bio { white-space:pre-wrap; }
+.film-card:hover { border-color: var(--line); }
+.film-card:focus:not(:focus-visible) { outline: none; }
+.film-card:focus-visible { outline: 2px solid white; outline-offset: -3px; }
+.gallery-item-wrap { padding:0; border:0; background:transparent; cursor:pointer; }
+#localNotice { color:var(--text); max-width:440px; }
+#localNotice::backdrop { background:rgba(0,0,0,.8); }
+#localNotice h2 { font-size:18px; }
+#noticeText { line-height:1.6; }
+#noticeUrl { width:100%; padding:10px; margin-bottom:16px; color:var(--text); background:var(--panel); border:1px solid var(--line); }
+.local-lightbox-close { position:absolute; top:20px; right:20px; }
+.sns-pill[data-brand="instagram"] .sns-icon { --sns-mask:url("/icons/instagram.svg"); }
+.sns-pill[data-brand="youtube"] .sns-icon { --sns-mask:url("/icons/youtube.svg"); }
+.sns-pill[data-brand="tiktok"] .sns-icon { --sns-mask:url("/icons/tiktok.svg"); }
+.sns-pill[data-brand="etc"] .sns-icon { --sns-mask:url("/icons/link.svg"); }
+#contactSection p { overflow-wrap:anywhere; margin-top:6px; }

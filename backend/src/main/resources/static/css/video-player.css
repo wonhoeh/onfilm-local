@@ -1,0 +1,388 @@
+
+    body {
+      margin: 0;
+      background: black;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, "Noto Sans KR", sans-serif;
+    }
+
+    .player-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: black;
+      overflow: hidden;
+    }
+
+    .player-status {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: rgba(255,255,255,.9);
+      font-size: 20px;
+      font-weight: 600;
+      text-align: center;
+      background: radial-gradient(circle at center, rgba(255,255,255,.06), rgba(0,0,0,.88));
+      z-index: 15;
+    }
+
+    .player-status.show {
+      display: flex !important;
+    }
+
+    video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: black;
+    }
+
+    .player-container:fullscreen video,
+    .player-container:-webkit-full-screen video {
+      top: 0;
+      left: 0;
+      transform: none;
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      object-fit: cover;
+    }
+
+    /* ───────────────────────────────
+       상단: 뒤로가기 + 제목
+    ─────────────────────────────── */
+    .top-left-info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 30;
+      transition: opacity .4s ease;
+    }
+
+    .top-left-info.hide-ui {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .back-icon svg {
+      width: 36px;
+      height: 36px;
+      stroke: white;
+      cursor: pointer;
+    }
+
+    .video-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: white;
+    }
+
+    /* ───────────────────────────────
+       시간 표시
+    ─────────────────────────────── */
+    .time-display {
+      position: absolute;
+      top: calc(100% - 150px);
+      left: 20px;
+      font-size: 15px;
+      color: white;
+      opacity: 1;
+      transition: opacity .3s;
+      z-index: 25;
+      padding-left: 30px;
+      padding-right: 30px;
+    }
+
+    /* ───────────────────────────────
+       타임라인
+    ─────────────────────────────── */
+    .timeline {
+      position: absolute;
+      bottom: 90px;
+      left: 0;
+      width: 100%;
+      height: 10px;
+      background: rgba(255,255,255,.25);
+      cursor: pointer;
+      z-index: 20;
+      /*padding-left: 30px;*/
+      /*padding-right: 30px;*/
+    }
+
+    .timeline-inner {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      border-radius: 999px;
+    }
+
+    .timeline-progress {
+      position: absolute;
+      inset: 0;
+      width: 0%;
+      height: 100%;
+      background: #e50914; /* Netflix red */
+    }
+
+    .timeline.hide-ui {
+      opacity: 0;
+      transition: opacity .3s ease;
+    }
+
+    /* ───────────────────────────────
+       하단 컨트롤 전체
+    ─────────────────────────────── */
+    .controls {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      padding: 20px 0 16px;
+      background: linear-gradient(to top, rgba(0,0,0,.6), transparent);
+      color: white;
+      opacity: 1;
+      transition: opacity .3s;
+      z-index: 25;
+    }
+
+    .bottom-bar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 0 20px;
+    }
+
+    .left-controls, .right-controls {
+      display: flex;
+      align-items: center;
+      gap: 30px;
+    }
+
+    .right-controls {
+      margin-left: auto;
+      margin-right: 40px;
+    }
+
+    .icon {
+      font-size: 40px;
+      cursor: pointer;
+      user-select: none;
+      padding-left: 10px;
+    }
+
+    /* UI 숨김 공통 */
+    .hide-ui {
+      opacity: 0;
+      transition: opacity .4s;
+    }
+
+    /* 배속 메뉴 */
+    .speed-wrapper {
+      position: relative;             /* ✅ 이걸 기준으로 메뉴 위치가 잡힘 */
+      display: flex;
+      align-items: center;
+    }
+
+    /* 배속 메뉴 */
+    .speed-btn {
+      font-size: 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* ✅ 이제 아이콘 바로 위, 가운데 정렬 */
+    .speed-menu {
+      position: absolute;
+      bottom: 32px;                   /* 버튼 위로 뜨게 */
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,.7);
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      display: none;
+      z-index: 40;
+    }
+
+    .speed-option {
+      padding: 6px 4px;
+      cursor: pointer;
+    }
+
+    .speed-option:hover {
+      color: #e50914;
+    }
+
+    /* ===== 세로 볼륨 팝업 UI ===== */
+    .volume-popup {
+      position: fixed;              /* 화면 기준 */
+      width: 50px;
+      height: 160px;
+      background: rgba(20,20,20,0.92);
+      border-radius: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);   /* 살짝 아래에서 시작 */
+      transition:
+              opacity .18s ease,
+              transform .18s ease;
+      z-index: 999;
+    }
+
+    .volume-popup.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);     /* 위로 살짝 떠오르게 */
+    }
+
+    /* 세로 슬라이더 */
+    .volume-vertical {
+      position: relative;
+      z-index: 10;
+      -webkit-appearance: none;
+      appearance: none;
+      width: 120px;
+      height: 6px;
+      background: transparent;
+      transform: rotate(-90deg);
+      transform-origin: center;
+    }
+
+    .volume-vertical::-webkit-slider-runnable-track {
+      background: transparent;
+    }
+
+    .volume-vertical::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: white;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    /* 트랙 (배경) */
+    .volume-track {
+      position: absolute;
+      width: 6px;
+      height: 120px;
+      background: #555;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    /* 파란 채워지는 부분 */
+    .volume-fill {
+      position: absolute;
+      bottom: 0;              /* 아래에서부터 채워짐 */
+      width: 100%;
+      height: 0%;             /* JS로 높이를 바꿔줌 */
+      /*background: #00a3ff;*/ /* 파란색 */
+      background: white;
+      transition: height .1s linear;
+    }
+
+    /* 가운데 재생/일시정지 인디케이터 */
+    .center-play-indicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9); /* 살짝 작게 시작 */
+
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+
+      /* ⬇⬇⬇ 테두리 없애고 반투명 동그라미만 */
+      border: none;
+      background: rgba(0, 0, 0, 0.45);
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      font-size: 38px;
+      font-weight: 700;
+      color: white;
+
+      opacity: 0;
+      pointer-events: none;
+      transition:
+              opacity .4s ease,
+              transform .4s ease; /* 서서히 나왔다가 사라지게 */
+      z-index: 50;
+    }
+
+    .center-play-indicator.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1); /* 살짝 커지면서 등장 */
+    }
+
+    /* 좌우 5초 이동 인디케이터 공통 */
+    .skip-indicator {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%) scale(0.9);
+
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+
+      /* ⬇⬇⬇ 테두리 없애고 반투명 동그라미만 */
+      border: none;
+      background: rgba(0, 0, 0, 0.45);
+      box-shadow: 0 0 32px rgba(0, 0, 0, 0.6);
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      font-size: 26px;
+      font-weight: 700;
+      color: white;
+
+      opacity: 0;
+      pointer-events: none;
+      transition:
+              opacity .4s ease,
+              transform .4s ease;
+      z-index: 50;
+    }
+
+    .skip-indicator.show {
+      opacity: 1;
+      transform: translateY(-50%) scale(1);
+    }
+
+    .skip-indicator-left {
+      left: 25%;
+    }
+
+    .skip-indicator-right {
+      right: 25%;
+    }
+
+    #playPause {
+      width: 40px;              /* 버튼 가로 폭 고정 */
+      padding-left: 0;          /* 왼쪽 여백 제거해서 딱 가운데 */
+      display: flex;            /* 가운데 정렬용 */
+      justify-content: center;
+      align-items: center;
+    }
+
+  

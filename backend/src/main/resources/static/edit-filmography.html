@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ko"><head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>필모그래피 편집 – OnFilm Local</title>
+  <link rel="stylesheet" href="/css/common.css"><link rel="stylesheet" href="/css/edit-filmography.css">
+  <link rel="stylesheet" href="/css/local-filmography.css">
+  <script src="/filmography.js" defer></script>
+</head><body class="ui-body"><div class="page-shell centered">
+  <header class="top-header"><div class="header-inner page-inner"><a class="back-link" href="/profile.html">← 프로필로 돌아가기</a><div class="header-title">필모그래피 편집</div></div></header>
+  <main class="page-main"><section class="edit-shell card-surface">
+    <div class="edit-header-row"><div><h1 class="edit-header-title">필모그래피</h1><p class="edit-header-hint">작품을 추가하고 위로·아래로 버튼으로 순서를 정리하세요. 최대 50개.</p></div><button id="addFilmBtn" type="button" class="primary-btn" disabled>+ 작품 추가</button></div>
+    <form id="filmographyForm"><div id="filmList" class="film-list"></div><p id="filmEmptyHint" hidden>아직 등록한 작품이 없습니다. 작품 추가를 눌러 주세요.</p><div class="form-footer"><a class="ghost-btn" href="/profile.html">취소</a><button id="saveFilms" class="primary-btn" disabled>저장</button></div></form>
+    <p id="filmStatus" role="status" aria-live="polite">필모그래피를 불러오는 중입니다.</p><button id="reloadFilms" type="button" class="ghost-btn">저장된 내용 다시 읽기</button>
+  </section></main><footer>© 2026 OnFilm · Local Portfolio</footer>
+</div></body></html>
