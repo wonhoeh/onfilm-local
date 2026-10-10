@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cloudflare 연결 · OnFilm</title>
+  <link rel="stylesheet" href="/css/common.css"><link rel="stylesheet" href="/css/local-tools.css"><link rel="stylesheet" href="/css/cloudflare.css">
+  <script src="/cloudflare.js" defer></script>
+</head>
+<body class="ui-body bg-fixed"><main class="tools-page">
+  <nav><a class="back-link" href="/export.html">← 공개본 관리</a><span class="brand">ONFILM / LOCAL</span></nav>
+  <header class="tools-heading"><span class="eyebrow">CLOUDFLARE</span><h1>공개할 공간을 연결하세요.</h1><p>한 번 입력한 키는 이 PC에 암호화해 보관합니다.</p></header>
+  <p id="desktopOnly" class="notice" hidden>연결 설정은 OnFilm 데스크톱 앱에서 사용할 수 있습니다.</p>
+  <form id="connectionForm" autocomplete="off">
+    <fieldset id="connectionFields" disabled>
+      <section class="tool-panel" aria-labelledby="accountTitle">
+        <div class="panel-heading"><h2 id="accountTitle">계정과 공개 주소</h2><span id="savedBadge" class="badge">미연결</span></div>
+        <div class="connection-grid">
+          <label class="connection-field wide">Account ID<input id="accountId" name="accountId" maxlength="32" required spellcheck="false" placeholder="Cloudflare 계정의 32자리 ID"><small>R2 S3 endpoint의 https:// 뒤, .r2 앞에 있는 값입니다.</small></label>
+          <label class="connection-field">프로필 도메인<input id="siteOrigin" name="siteOrigin" type="url" value="https://onfilm.co.kr" required spellcheck="false"></label>
+          <label class="connection-field">미디어 주소<input id="mediaOrigin" name="mediaOrigin" type="url" value="https://media.onfilm.co.kr" required spellcheck="false"></label>
+          <label class="connection-field wide">공개 주소 이름<input id="publicSlug" name="publicSlug" minlength="3" maxlength="30" required spellcheck="false" autocapitalize="none" placeholder="예: wonhoe_01" aria-describedby="publicSlugHelp publicSlugError"><small id="publicSlugHelp">영문 소문자·숫자·하이픈(-)·언더바(_) · 3~30자</small><small id="publicSlugError" class="field-error" aria-live="polite"></small></label>
+        </div>
+        <div class="public-address"><span>공개 주소 미리보기</span><output id="publicUrlPreview" for="siteOrigin publicSlug" aria-live="polite">공개 주소 이름을 입력해 주세요.</output><small>게시할 때 사용할 주소입니다. 설정 저장만으로 현재 사이트 주소가 바뀌지는 않습니다.</small></div>
+      </section>
+      <section class="tool-panel" aria-labelledby="r2Title">
+        <div class="panel-heading"><h2 id="r2Title">사진·영상 저장소</h2><span class="badge">R2</span></div>
+        <div class="connection-grid">
+          <label class="connection-field wide">버킷 이름<input id="bucket" name="bucket" value="onfilm-media" maxlength="63" required spellcheck="false"></label>
+          <label class="connection-field">Access Key ID<input id="accessKeyId" name="accessKeyId" type="password" autocomplete="new-password" maxlength="512" spellcheck="false"></label>
+          <label class="connection-field">Secret Access Key<input id="secretAccessKey" name="secretAccessKey" type="password" autocomplete="new-password" maxlength="512" spellcheck="false"></label>
+        </div>
+        <p class="quiet">onfilm-media 버킷에 Object Read &amp; Write 권한을 가진 키를 입력하세요.</p>
+      </section>
+      <section class="tool-panel" aria-labelledby="pagesTitle">
+        <div class="panel-heading"><h2 id="pagesTitle">포트폴리오 페이지</h2><span class="badge">Pages</span></div>
+        <div class="connection-grid">
+          <label class="connection-field">프로젝트 이름<input id="project" name="project" maxlength="58" required spellcheck="false" placeholder="예: my-onfilm"><small>my-onfilm.pages.dev라면 my-onfilm만 입력하세요.</small></label>
+          <label class="connection-field">Pages API Token<input id="pagesToken" name="pagesToken" type="password" autocomplete="new-password" maxlength="512" spellcheck="false"><small>Account → Cloudflare Pages → Edit 권한</small></label>
+        </div>
+      </section>
+    </fieldset>
+    <p id="credentialHint" class="quiet">키는 공개본·데이터 백업에 포함되지 않습니다. 다른 PC에서는 다시 입력하세요.</p>
+    <div class="panel-actions"><button id="saveConnection" type="submit" class="primary-btn" disabled>설정 저장</button><button id="checkConnection" type="button" class="ghost-btn" disabled>연결 확인</button></div>
+  </form>
+  <p id="connectionStatus" class="status-line" role="status" aria-live="polite">저장된 설정을 확인하고 있습니다.</p>
+  <div id="connectionResults" class="connection-results" aria-live="polite"></div>
+  <p class="quiet">연결 확인은 R2 버킷과 Pages 프로젝트를 조회합니다. 업로드·게시·쓰기 권한과 영상 재생은 아직 확인하지 않습니다.</p>
+  <details class="tool-details"><summary>이 PC의 연결 설정 삭제</summary><div class="details-body"><p>저장된 키와 연결 정보를 이 PC에서 지웁니다. 공개 사이트와 R2 파일은 유지되며, Cloudflare에서 키 자체가 폐기되지는 않습니다.</p><button id="clearConnection" type="button" class="ghost-btn" disabled>연결 설정 삭제</button><div id="clearConfirm" hidden><p>이 PC에 저장된 연결 정보를 삭제할까요?</p><button id="confirmClear" type="button" class="ghost-btn">삭제</button> <button id="cancelClear" type="button" class="ghost-btn">취소</button></div></div></details>
+</main></body></html>

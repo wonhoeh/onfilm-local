@@ -9,6 +9,25 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.assertj.core.api.Assertions.*;
 
 class PortfolioExportTest extends LocalPersistenceTest {
+    @Test void exportAssetsHaveSeparateCacheKeysWithoutChangingNavigation(){
+        String html="<script src=\"public-profile.js\"></script><link href=\"css/common.css\"><a href=\"filmography.html\">";
+        assertThat(PortfolioExportService.versionAssets(html,"release-2"))
+            .contains("public-profile.js?v=release-2","css/common.css?v=release-2","href=\"filmography.html\"");
+    }
+    @Test void exportOptimizesPortraitWithoutChangingPersistentPhoto()throws Exception{
+        byte[] original;
+        try(var ctx=start()){
+            var image=new java.awt.image.BufferedImage(1200,1800,java.awt.image.BufferedImage.TYPE_INT_RGB);
+            var buffer=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(image,"png",buffer);original=buffer.toByteArray();
+            var jdbc=ctx.getBean(JdbcTemplate.class);jdbc.update("UPDATE profile SET name='배우',portrait=? WHERE id=1",original);
+            var exports=ctx.getBean(PortfolioExportService.class);var result=exports.create();
+            var data=ctx.getBean(com.fasterxml.jackson.databind.ObjectMapper.class).readTree(exports.resource(result.id(),"portfolio.json").toFile());
+            String photo=data.path("profile").path("portrait").asText();assertThat(photo).isEqualTo("media/portrait.jpg");
+            assertThat(javax.imageio.ImageIO.read(exports.resource(result.id(),photo).toFile()).getHeight()).isEqualTo(960);
+            assertThat(jdbc.queryForObject("SELECT portrait FROM profile WHERE id=1",byte[].class)).isEqualTo(original);
+        }
+        try(var ctx=start()){assertThat(ctx.getBean(JdbcTemplate.class).queryForObject("SELECT portrait FROM profile WHERE id=1",byte[].class)).isEqualTo(original);}
+    }
     @Test void archiveContainsOnlyPublicFilesAndFailedArchiveIsNotPublished()throws Exception{
         try(var ctx=start()){
             ctx.getBean(JdbcTemplate.class).update("UPDATE profile SET name='배우' WHERE id=1");
@@ -45,6 +64,13 @@ class PortfolioExportTest extends LocalPersistenceTest {
             assertThat(data.toString()).doesNotContain("version","token","jobId",temporary.toString());
             assertThat(data.path("films").get(0).path("id").asText()).isEqualTo("film-0");
             assertThat(Files.readString(exports.resource(id,"index.html"))).doesNotContain("script>bad","edit-filmography","profileSettingsBtn");
+            assertThat(Files.readString(exports.resource(id,"index.html"))).contains("href=\"filmography.html\"","public-film-card.js");
+            assertThat(Files.readString(exports.resource(id,"index.html"))).contains("public-profile.js?v="+id);
+            assertThat(Files.readString(exports.resource(id,"filmography.html"))).contains("public-filmography.js?v="+id);
+            assertThat(Files.readString(exports.resource(id,"video-player.html"))).contains("video-player.js?v="+id);
+            assertThat(Files.readString(exports.resource(id,"filmography.html"))).contains("출연 영상","출연 이력","public-filmography.js").doesNotContain("/api/","편집","notifications.js");
+            assertThat(Files.readString(exports.resource(id,"public-filmography.js"))).contains("fetch('portfolio.json')").doesNotContain("/api/");
+            assertThat(Files.size(exports.resource(id,"css/filmography-view.css"))).isPositive();
             assertThat(Files.readString(exports.resource(id,"css/actor-detail.css"))).doesNotContain("cdn.jsdelivr.net");
             assertThat(Files.readString(exports.resource(id,"video-player.html"))).contains("data-public-portfolio").doesNotContain("src=\"/","href=\"/");
             for(var entry:result.files())assertThat(Files.size(exports.resource(id,entry.path()))).isEqualTo(entry.bytes());

@@ -28,7 +28,8 @@ public class PlaybackController {
         var rows = jdbc.query("""
                 SELECT f.title, j.id, j.attempts FROM encode_job j
                 JOIN local_video v ON v.id=j.video_id
-                JOIN filmography_item f ON f.id=v.film_id
+                LEFT JOIN filmography_trailer t ON t.video_id=v.id
+                JOIN filmography_item f ON f.id=COALESCE(v.film_id,t.film_id)
                 WHERE v.id=? AND v.status='READY' AND j.status='DONE'
                 """, (r, n) -> new Completed(r.getString("title"), jobs.output(r.getString("id"), r.getInt("attempts"))), videoId);
         if (rows.size() != 1) throw missing();

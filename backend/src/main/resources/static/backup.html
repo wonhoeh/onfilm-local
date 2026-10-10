@@ -1,11 +1,36 @@
-<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>백업·복원</title>
-<link rel="stylesheet" href="/css/common.css"><link rel="stylesheet" href="/css/edit-gallery.css"><link rel="stylesheet" href="/css/local-gallery.css"><script src="/backup.js" defer></script></head>
-<body class="ui-body"><div class="page-shell centered"><header class="top-header"><div class="page-inner"><a id="back" href="/profile.html">← 프로필로 돌아가기</a></div></header>
-<main class="page-main"><section class="card-surface edit-card"><h1>데이터 백업·복원</h1>
-<p>프로필·사진·작품·이메일·원본 영상·인코딩 결과를 함께 보관합니다. 공개본 ZIP과 다르며, 백업 폴더 전체를 보관해야 합니다.</p>
-<p>인코딩과 대기 작업이 끝난 뒤 실행해 주세요. 작업 중 로컬 서버를 잠시 종료하고 완료 후 다시 시작합니다. 완료 전 앱이나 PC를 종료하지 마세요.</p>
-<p>공개본·ZIP·로그는 제외합니다. 백업은 암호화되지 않으므로 다른 사람에게 공유하거나 공개 호스팅에 올리지 마세요. 직접 만든 신뢰할 수 있는 백업만 복원하세요.</p>
-<p><button id="createBackup" class="primary-btn" type="button">백업 만들기</button> <button id="restoreBackup" class="ghost-btn" type="button">백업에서 복원</button></p>
-<p id="backupStatus" role="status" aria-live="polite"></p>
-<p>복원 전 데이터와 실패한 임시 파일은 안전을 위해 자동 삭제하지 않습니다. 추가 저장 공간이 필요합니다.</p>
-</section></main></div></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>데이터 백업·복원 · OnFilm</title>
+  <link rel="stylesheet" href="/css/common.css"><link rel="stylesheet" href="/css/local-tools.css">
+  <script src="/backup.js" defer></script>
+<link rel="stylesheet" href="/css/notifications.css"><script src="/notifications.js" defer></script>
+</head>
+<body class="ui-body bg-fixed"><main class="tools-page">
+  <nav><a id="back" class="back-link" href="/profile.html">← 프로필로 돌아가기</a><span class="brand">ONFILM / LOCAL</span></nav>
+  <header class="tools-heading"><span class="eyebrow">BACKUP &amp; RESTORE</span><h1>내 작업을 안전하게.</h1><p>프로필부터 원본 영상까지, 다시 이어갈 수 있도록 보관하세요.</p></header>
+  <div class="notice"><span class="notice-mark" aria-hidden="true">!</span><div><strong>작업이 모두 끝난 뒤 실행해 주세요.</strong><p>인코딩·대기 작업이 없어야 합니다. 완료 전 앱이나 PC를 종료하지 마세요.</p></div></div>
+  <div class="tools-grid">
+    <section class="tool-panel action-panel featured" aria-labelledby="backupTitle">
+      <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5"/></svg>
+      <h2 id="backupTitle">백업 만들기</h2><p class="description">현재 데이터를 선택한 폴더에<br>안전하게 복사합니다.</p>
+      <div class="scope-tags"><span>프로필·작품</span><span>사진</span><span>원본·변환 영상</span></div>
+      <p class="quiet">공개본 ZIP과 달라요. 백업 폴더 전체를 보관하세요.</p>
+      <button id="createBackup" class="primary-btn" type="button">백업 위치 선택</button>
+    </section>
+    <section class="tool-panel action-panel" aria-labelledby="restoreTitle">
+      <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6m2-3v5l3 2"/></svg>
+      <h2 id="restoreTitle">백업에서 복원</h2><p class="description">선택한 백업 시점으로<br>앱 데이터를 되돌립니다.</p>
+      <p class="restore-note">현재 데이터가 백업 내용으로 바뀝니다.<br>복원 전 데이터는 별도 폴더에 보관합니다.</p>
+      <p class="quiet">직접 만든 신뢰할 수 있는 백업만 선택하세요.</p>
+      <button id="restoreBackup" class="ghost-btn" type="button">백업 폴더 선택</button>
+    </section>
+  </div>
+  <div id="backupStatus" class="result-box" role="status" aria-live="polite"></div>
+  <div id="backupLocation" class="location-box" hidden><span id="backupLocationLabel" class="quiet"></span><p id="backupLocationPath" class="file-path"></p></div>
+  <section class="tool-panel compact">
+    <p class="privacy-note"><strong>백업은 개인 보관용입니다.</strong> 암호화되지 않으므로 공유하거나 공개 사이트에 올리지 마세요.</p>
+    <details class="tool-details"><summary>백업 범위와 작업 방식</summary><div class="details-body"><p>프로필·이메일·사진·작품·원본 영상·인코딩 결과가 포함됩니다. 공개본·ZIP·로그는 제외합니다.</p><p>작업 중 로컬 서버를 잠시 멈추고, 완료 후 다시 시작합니다. 복원 전 데이터와 실패한 임시 파일은 자동 삭제하지 않으므로 추가 저장 공간이 필요합니다.</p></div></details>
+  </section>
+</main></body></html>

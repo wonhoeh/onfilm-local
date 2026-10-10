@@ -1,0 +1,15 @@
+.filmography-view{padding-top:32px;padding-bottom:80px}
+.back-link{display:inline-block;color:var(--muted,#aaa);text-decoration:none;margin-bottom:28px}
+.filmography-view h1{font-size:28px;letter-spacing:.06em;margin:0}
+.filmography-view section{margin-top:40px}
+.filmography-view h2{font-size:20px;margin-bottom:20px}
+.filmography-view h2 span{font-size:14px;color:var(--muted,#aaa);margin-left:8px}
+.film-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+.film-grid .film-card{width:100%;min-width:0;max-width:none}
+.film-grid .film-meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.group-empty{padding:32px 20px;border:1px dashed var(--line,#333);border-radius:14px;color:var(--muted,#aaa);text-align:center}
+#filmDetails{max-width:520px;width:calc(100% - 48px);box-sizing:border-box;background:var(--panel,#17171e);color:var(--text,#fff);border:1px solid var(--line,#333);border-radius:16px;padding:28px}
+#filmDetails::backdrop{background:#0009}
+#detailsText{white-space:pre-line;overflow-wrap:anywhere;line-height:1.8}
+@media(max-width:760px){.film-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}}
+@media(max-width:480px){.film-grid{grid-template-columns:1fr}.filmography-view h1{font-size:24px}}

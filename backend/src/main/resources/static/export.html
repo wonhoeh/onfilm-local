@@ -1,14 +1,41 @@
-<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>공개본 만들기</title>
-<link rel="stylesheet" href="/css/common.css"><link rel="stylesheet" href="/css/edit-gallery.css"><link rel="stylesheet" href="/css/local-gallery.css"><script src="/export.js" defer></script></head>
-<body class="ui-body"><div class="page-shell centered"><header class="top-header"><div class="page-inner"><a class="back-link" href="/profile.html">← 프로필로 돌아가기</a><h1 class="header-title">공개본 만들기</h1></div></header>
-<main class="page-main"><section class="card-surface edit-card"><h2>읽기 전용 포트폴리오</h2>
-<p>저장된 프로필·사진·필모그래피와 HLS 영상을 별도 파일로 복사합니다. 온라인에는 아직 게시되지 않습니다.</p>
-<p>DB, 원본 영상, 작업 기록은 포함하지 않습니다. 연결된 영상은 모두 인코딩을 완료해 주세요. 복사할 영상만큼 추가 저장 공간이 필요합니다.</p>
-<label><input id="confirmExport" type="checkbox"> 현재 프로필의 생년월일·출생지·SNS·사진·작품 및 입력된 이메일을 공개본에 포함하는 것을 확인했습니다.</label>
-<p>이메일을 표시하지 않으려면 프로필 편집에서 비워 저장해 주세요. 이전 공개본·ZIP·게시된 사이트에서는 자동 삭제되지 않습니다. 전화번호는 새 공개본에 포함하지 않습니다.</p>
-<p><button id="createExport" type="button" class="primary-btn" disabled>새 공개본 만들기</button> <button id="reloadExports" type="button" class="ghost-btn">결과 다시 읽기</button></p>
-<p id="exportStatus" role="status">저장된 공개본을 확인하고 있습니다.</p><p id="exportDirectory"></p><div id="exportsList"></div>
-<h2>앱 저장 공간</h2><button id="readStorage" type="button" class="ghost-btn">사용량 확인</button><p id="storageStatus" role="status"></p>
-<p>파일 크기의 합계이며 작업 중에는 달라질 수 있습니다. 외부 백업·복원 전 보관 폴더·외부에 저장한 ZIP·휴지통 사용량은 포함하지 않습니다. 휴지통을 비워야 실제 여유 공간이 늘어납니다.</p>
-<p>공개본은 만든 시점의 복사본입니다. ZIP 저장으로 보관하거나 결과 폴더를 열 수 있습니다. 로컬 수정 후 다시 만들면 새 공개본이 추가됩니다. 정리는 확인 후 선택한 공개본만 휴지통으로 이동합니다. DB·원본 영상·백업·외부 ZIP·게시된 사이트는 변경하지 않습니다. 실패 부분 파일 정리·온라인 게시는 후속 단계입니다.</p>
-</section></main></div></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>공개본 만들기 · OnFilm</title>
+  <link rel="stylesheet" href="/css/common.css"><link rel="stylesheet" href="/css/local-tools.css">
+  <script src="/export.js" defer></script>
+<link rel="stylesheet" href="/css/notifications.css"><script src="/notifications.js" defer></script>
+</head>
+<body class="ui-body bg-fixed"><main class="tools-page">
+  <nav><a class="back-link" href="/profile.html">← 프로필로 돌아가기</a><span class="brand">ONFILM / LOCAL</span></nav>
+  <header class="tools-heading"><span class="eyebrow">PORTFOLIO EXPORT</span><h1>보여줄 준비, 한 번에.</h1><p>완성된 프로필을 공개용 파일로 만들고 미리 확인하세요.</p></header>
+  <section class="tool-panel compact" aria-labelledby="cloudTitle">
+    <div class="panel-heading"><div><h2 id="cloudTitle">온라인 게시</h2><p class="quiet">미리보기를 확인한 공개본의 게시 버튼을 눌러 주세요.</p></div><a class="btn" href="/cloudflare.html">Cloudflare 연결</a></div>
+    <p id="publishStatus" class="status-line" role="status" aria-live="polite">게시 설정을 확인하고 있습니다.</p>
+    <progress id="publishProgress" max="100" value="0" hidden aria-label="미디어 업로드 진행률"></progress>
+    <p id="publishedUrl" class="file-path"></p>
+    <button id="checkPublication" class="btn" type="button" hidden>이전 배포 결과 확인</button>
+    <button id="cancelPublication" class="btn" type="button" hidden>업로드·결과 대기 중단</button>
+    <details class="tool-details"><summary>게시와 저장 공간 안내</summary><div class="details-body"><p>선택한 공개본으로 연결된 Pages 프로젝트 전체를 교체합니다. 사진·재생용 영상은 R2에 저장되며, 원본 영상과 DB는 업로드하지 않습니다.</p><p>수정 후에는 새 공개본을 만들어 게시하세요. 이전·실패한 업로드 파일은 안전을 위해 R2에서 자동 삭제하지 않으므로 저장 용량이 늘 수 있습니다. 게시 종료·원격 파일 정리는 아직 지원하지 않습니다.</p></div></details>
+  </section>
+  <section class="tool-panel featured" aria-labelledby="createTitle">
+    <div class="panel-heading"><h2 id="createTitle">공개본 만들기</h2><span class="badge">읽기 전용</span></div>
+    <p class="description">프로필·사진·작품·재생용 영상을 담습니다.<br>파일만 만들어지며, 온라인에 자동 게시되지 않습니다.</p>
+    <ol class="steps"><li><span>01</span>공개본 만들기</li><li><span>02</span>미리보기 확인</li><li><span>03</span>게시 또는 ZIP 저장</li></ol>
+    <label class="consent"><input id="confirmExport" type="checkbox"><span>현재 프로필 정보를 공개본에 포함합니다.<small>생년월일·출생지·SNS·사진·작품·입력한 이메일</small></span></label>
+    <div class="panel-actions"><button id="createExport" type="button" class="primary-btn" disabled>새 공개본 만들기 <span aria-hidden="true">↗</span></button><span class="quiet">연결된 영상은 인코딩을 먼저 완료해 주세요.</span></div>
+    <details class="tool-details"><summary>포함되는 정보와 주의사항</summary><div class="details-body"><p>이메일을 숨기려면 프로필에서 비워 저장하세요. 전화번호·DB·원본 영상·작업 기록은 포함하지 않습니다.</p><p>영상 복사에 추가 저장 공간이 필요합니다. 수정한 내용은 새 공개본을 만들어야 반영되며, 이전 ZIP이나 게시된 사이트는 자동으로 바뀌지 않습니다.</p></div></details>
+  </section>
+  <section class="tool-panel" aria-labelledby="exportsTitle">
+    <div class="panel-heading"><div><span class="eyebrow">SAVED EXPORTS</span><h2 id="exportsTitle">만든 공개본</h2></div><button id="reloadExports" type="button" class="ghost-btn">새로고침</button></div>
+    <p id="exportStatus" class="status-line" role="status" aria-live="polite">저장된 공개본을 확인하고 있습니다.</p>
+    <div id="exportsList" class="export-list"></div>
+    <details class="tool-details"><summary>저장 위치와 정리 안내</summary><div class="details-body"><p id="exportDirectory" class="file-path"></p><p>휴지통으로 이동하면 선택한 공개본만 정리됩니다. 프로필·원본 영상·백업·외부 ZIP·게시된 사이트는 그대로 유지됩니다.</p><p>실제 여유 공간은 휴지통을 비운 뒤 늘어납니다.</p></div></details>
+  </section>
+  <section class="tool-panel" aria-labelledby="storageTitle">
+    <div class="panel-heading"><div><span class="eyebrow">STORAGE</span><h2 id="storageTitle">앱 저장 공간</h2></div><button id="readStorage" type="button" class="ghost-btn">사용량 확인</button></div>
+    <div id="storageStatus" class="status-line" role="status" aria-live="polite">사용량 확인을 누르면 항목별 용량을 볼 수 있습니다.</div>
+    <details class="tool-details"><summary>사용량 계산 기준</summary><div class="details-body"><p>앱 내부 파일 크기의 합계로, 작업 중에는 달라질 수 있습니다. 외부 백업·복원 전 보관 폴더·외부 ZIP·휴지통은 제외합니다. 디스크의 남은 공간을 뜻하지 않습니다.</p></div></details>
+  </section>
+</main></body></html>

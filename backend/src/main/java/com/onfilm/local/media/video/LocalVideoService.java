@@ -36,6 +36,20 @@ public class LocalVideoService {
             return new Video(id,r.getString("film_id"),r.getString("original_name"),size,r.getString("status"),available);
         });
     }
+    public Video findReady(String id){
+        if(id==null)return null;
+        var rows=jdbc.query("SELECT * FROM local_video WHERE id=? AND status='READY'",(r,n)->{
+            long size=r.getLong("size_bytes");boolean available=false;
+            try{available=Files.isRegularFile(path(id,".source"),LinkOption.NOFOLLOW_LINKS)&&Files.size(path(id,".source"))==size;}catch(IOException ignored){}
+            return new Video(id,r.getString("film_id"),r.getString("original_name"),size,"READY",available);
+        },id);return rows.isEmpty()?null:rows.get(0);
+    }
+    public List<Video> trailers(){
+        return jdbc.query("SELECT film_id,video_id FROM filmography_trailer",(r,n)->{
+            Video v=findReady(r.getString("video_id"));
+            return new Video(v.id(),r.getString("film_id"),v.name(),v.bytes(),v.status(),v.available());
+        });
+    }
     private void claim(String filmId,long version) {
         if(jdbc.update("UPDATE filmography_state SET version=version+1 WHERE id=1 AND version=?",version)!=1) throw error(HttpStatus.CONFLICT,"작품 정보가 변경됐습니다. 다시 읽기로 확인해 주세요.");
         if(jdbc.queryForObject("SELECT COUNT(*) FROM filmography_item WHERE id=?",Integer.class,filmId)!=1) throw error(HttpStatus.NOT_FOUND,"작품을 찾을 수 없습니다.");
@@ -44,6 +58,15 @@ public class LocalVideoService {
         tx.executeWithoutResult(s->{claim(filmId,version);jdbc.update("UPDATE local_video SET film_id=NULL WHERE film_id=?",filmId);});
     }
     public void upload(String filmId,long version,String name,long length,InputStream input) throws IOException {
+        copy(filmId,version,null,false,name,length,input);
+    }
+    public void uploadDraft(String draftId,String name,long length,InputStream input)throws IOException{
+        copy(null,0,draftId,false,name,length,input);
+    }
+    public void uploadTrailerDraft(String draftId,String name,long length,InputStream input)throws IOException{
+        copy(null,0,draftId,true,name,length,input);
+    }
+    private void copy(String filmId,long version,String draftId,boolean trailer,String name,long length,InputStream input)throws IOException{
         if(length<=0||length>MAX_BYTES)throw error(HttpStatus.PAYLOAD_TOO_LARGE,"빈 파일은 저장할 수 없으며 영상은 2GB 이하여야 합니다.");
         if(name==null||name.isBlank()||name.length()>200||name.chars().anyMatch(c->c<32)||name.contains("/")||name.contains("\\"))throw error(HttpStatus.BAD_REQUEST,"파일 이름을 확인해 주세요.");
         String lower=name.toLowerCase(Locale.ROOT);
@@ -52,8 +75,10 @@ public class LocalVideoService {
         String id=UUID.randomUUID().toString();boolean registered=false,linked=false;
         try{
             // Read-only preflight; the final transaction checks version again after the slow copy.
+            if(draftId==null){
             if(jdbc.queryForObject("SELECT version FROM filmography_state WHERE id=1",Long.class)!=version)throw error(HttpStatus.CONFLICT,"다시 읽기로 작품 상태를 확인해 주세요.");
             if(jdbc.queryForObject("SELECT COUNT(*) FROM filmography_item WHERE id=?",Integer.class,filmId)!=1)throw error(HttpStatus.NOT_FOUND,"작품을 찾을 수 없습니다.");
+            }else if(jdbc.queryForObject("SELECT COUNT(*) FROM filmography_media_draft WHERE id=?",Integer.class,draftId)!=1)throw error(HttpStatus.NOT_FOUND,"임시 작업이 없습니다.");
             if(Files.getFileStore(root).getUsableSpace()<length+64L*1024*1024)throw error(HttpStatus.INSUFFICIENT_STORAGE,"저장 공간이 부족합니다.");
             byte[] header=input.readNBytes(16);
             if(header.length<16||header[4]!='f'||header[5]!='t'||header[6]!='y'||header[7]!='p')throw error(HttpStatus.BAD_REQUEST,"MP4·MOV 컨테이너 헤더를 확인할 수 없습니다. 파일을 확인해 주세요.");
@@ -66,9 +91,15 @@ public class LocalVideoService {
             }
             Files.move(path(id,".part"),path(id,".source"),StandardCopyOption.ATOMIC_MOVE);
             tx.executeWithoutResult(s->{
+                if(draftId!=null){
+                    if(jdbc.queryForList("SELECT id FROM filmography_media_draft WHERE id=? FOR UPDATE",String.class,draftId).isEmpty())throw error(HttpStatus.CONFLICT,"임시 작업이 이미 저장됐습니다. 다시 읽기로 확인해 주세요.");
+                    jdbc.update("UPDATE local_video SET status='READY' WHERE id=?",id);
+                    jdbc.update(trailer?"UPDATE filmography_media_draft SET trailer_changed=TRUE,trailer_id=? WHERE id=?":"UPDATE filmography_media_draft SET video_changed=TRUE,video_id=? WHERE id=?",id,draftId);
+                }else{
                 claim(filmId,version);
                 jdbc.update("UPDATE local_video SET film_id=NULL WHERE film_id=?",filmId);
                 jdbc.update("UPDATE local_video SET film_id=?,status='READY' WHERE id=?",filmId,id);
+                }
             });
             linked=true;
         }finally{

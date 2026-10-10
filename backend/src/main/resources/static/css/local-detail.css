@@ -6,6 +6,15 @@
 .film-card:hover { border-color: var(--line); }
 .film-card:focus:not(:focus-visible) { outline: none; }
 .film-card:focus-visible { outline: 2px solid white; outline-offset: -3px; }
+.film-arrow:not([hidden]) { display:flex; align-items:center; justify-content:center; }
+@media (max-width:1400px) {
+  .film-arrow.left { left:-36px; }
+  .film-arrow.right { right:-36px; }
+}
+@media (max-width:600px) {
+  .film-arrow.left { left:0; }
+  .film-arrow.right { right:0; }
+}
 .gallery-item-wrap { padding:0; border:0; background:transparent; cursor:pointer; }
 #localNotice { color:var(--text); max-width:440px; }
 #localNotice::backdrop { background:rgba(0,0,0,.8); }
@@ -18,3 +27,24 @@
 .sns-pill[data-brand="tiktok"] .sns-icon { --sns-mask:url("/icons/tiktok.svg"); }
 .sns-pill[data-brand="etc"] .sns-icon { --sns-mask:url("/icons/link.svg"); }
 #contactSection p { overflow-wrap:anywhere; margin-top:6px; }
+.save-toast {
+  position:fixed; top:20px; left:50%; z-index:10000;
+  max-width:calc(100vw - 32px); box-sizing:border-box;
+  padding:14px 24px; border-radius:12px; background:#242424; color:#fff;
+  font-size:14px; text-align:center; box-shadow:0 8px 28px #0003;
+  pointer-events:none; opacity:0; transform:translate(-50%,calc(-100% - 24px));
+  transition:transform .3s ease, opacity .3s ease;
+}
+.save-toast.show { opacity:1; transform:translate(-50%,0); }
+@media (prefers-reduced-motion:reduce) { .save-toast { transition:none; } }
+.popup-mute-btn svg, .popup-mute-btn path { pointer-events:none; }
+.popup-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.film-section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.film-section-heading h2{margin:0}
+.film-section-heading a{color:var(--muted,#aaa);text-decoration:none;font-size:14px;white-space:nowrap}
+.film-section-heading a:hover{color:var(--text,#fff)}
+.popup-participation{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.experience-preview .popup-video-box{height:52%}
+.experience-preview .popup-info{height:48%;box-sizing:border-box;overflow:auto}
+.popup-meta { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@media (prefers-reduced-motion:reduce) { .movie-popup { transition:none; } }

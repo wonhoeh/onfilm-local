@@ -19,6 +19,9 @@ public class FfmpegEncoder {
     public FfmpegEncoder(@Value("${onfilm.ffmpeg}") String ffmpeg,@Value("${onfilm.ffprobe}") String ffprobe,ObjectMapper json){this.ffmpeg=ffmpeg;this.ffprobe=ffprobe;this.json=json;}
     public static class Failure extends Exception { public Failure(String message){super(message);} }
     String run(List<String> command,Duration timeout) throws Exception {
+        return run(command,timeout,line->{});
+    }
+    String run(List<String> command,Duration timeout,java.util.function.Consumer<String> progress) throws Exception {
         Process process;
         synchronized(this){
             if(closing)throw new InterruptedException();
@@ -31,8 +34,16 @@ public class FfmpegEncoder {
         var output=new CompletableFuture<String>();
         Thread.ofVirtual().start(()->{
             try(var input=process.getInputStream();var bytes=new ByteArrayOutputStream()){
-                byte[] buffer=new byte[8192];int n;
-                while((n=input.read(buffer))!=-1){if(bytes.size()<131072)bytes.write(buffer,0,Math.min(n,131072-bytes.size()));}
+                byte[] buffer=new byte[8192];int n;var line=new StringBuilder();
+                while((n=input.read(buffer))!=-1){
+                    if(bytes.size()<131072)bytes.write(buffer,0,Math.min(n,131072-bytes.size()));
+                    for(int i=0;i<n;i++){
+                        if(buffer[i]=='\n'){
+                            try{progress.accept(line.toString());}catch(RuntimeException ignored){/* Progress is best effort; keep draining the child. */}
+                            line.setLength(0);
+                        }else if(line.length()<4096)line.append((char)buffer[i]);
+                    }
+                }
                 output.complete(bytes.toString(StandardCharsets.UTF_8));
             }catch(Exception e){output.completeExceptionally(e);}
         });
@@ -48,6 +59,14 @@ public class FfmpegEncoder {
         }
     }
     public void encode(Path source,Path output) throws Exception {
+        encode(source,output,percent->{});
+    }
+    static int progressPercent(String line,double seconds){
+        if(!line.startsWith("out_time_us=")||!Double.isFinite(seconds)||seconds<=0)return -1;
+        try{return (int)Math.max(0,Math.min(99,Double.parseDouble(line.substring(12).trim())/1_000_000/seconds*100));}
+        catch(NumberFormatException ignored){return -1;}
+    }
+    public void encode(Path source,Path output,java.util.function.IntConsumer progress) throws Exception {
         if(!Files.isRegularFile(source,LinkOption.NOFOLLOW_LINKS))throw new Failure("원본 영상 파일을 찾을 수 없습니다.");
         String probe=run(List.of(ffprobe,"-v","error","-protocol_whitelist","file,pipe","-enable_drefs","0","-use_absolute_path","0","-select_streams","v:0","-show_entries","stream=width,height:format=duration","-of","json",source.toString()),Duration.ofSeconds(30));
         var info=json.readTree(probe);var streams=info.path("streams");
@@ -56,12 +75,12 @@ public class FfmpegEncoder {
         if(width<2||height<2||(long)width*height>40_000_000||!Double.isFinite(seconds)||seconds<=0||seconds>6*3600)throw new Failure("지원 범위를 벗어난 영상입니다. 영상 트랙·해상도(4천만 화소 이하)·길이(6시간 이하)를 확인해 주세요.");
         Files.createDirectories(output);
         if(Files.getFileStore(output).getUsableSpace()<Math.max(256L*1024*1024,Files.size(source)*2))throw new Failure("인코딩을 시작할 저장 공간이 부족합니다.");
-        run(List.of(ffmpeg,"-hide_banner","-nostdin","-v","error","-xerror","-protocol_whitelist","file,pipe","-enable_drefs","0","-use_absolute_path","0","-threads","2","-i",source.toString(),
+        run(List.of(ffmpeg,"-hide_banner","-nostdin","-v","error","-progress","pipe:1","-nostats","-xerror","-protocol_whitelist","file,pipe","-enable_drefs","0","-use_absolute_path","0","-threads","2","-i",source.toString(),
             "-map","0:v:0","-map","0:a:0?","-map_metadata","-1","-map_chapters","-1","-sn","-dn",
             "-filter_threads","1","-vf","scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1",
             "-c:v","libx264","-threads","2","-preset","veryfast","-crf","23","-pix_fmt","yuv420p","-force_key_frames","expr:gte(t,n_forced*4)",
             "-c:a","aac","-b:a","128k","-ac","2","-f","hls","-hls_time","4","-hls_playlist_type","vod","-hls_flags","independent_segments",
-            "-hls_segment_filename",output.resolve("segment-%05d.ts").toString(),output.resolve("index.m3u8").toString()),Duration.ofHours(6));
+            "-hls_segment_filename",output.resolve("segment-%05d.ts").toString(),output.resolve("index.m3u8").toString()),Duration.ofHours(6),line->{int percent=progressPercent(line,seconds);if(percent>=0)progress.accept(percent);});
         validateOutput(output);
     }
     void validateOutput(Path output) throws Exception {

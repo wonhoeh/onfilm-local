@@ -1,0 +1,5 @@
+CREATE TABLE gallery_photo_draft (
+    id VARCHAR(36) PRIMARY KEY,
+    image BLOB NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

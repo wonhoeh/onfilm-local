@@ -27,7 +27,7 @@ public class PortfolioExportService {
     private final TransactionTemplate snapshot;
     private final AtomicBoolean busy=new AtomicBoolean();
     private static final List<String> ASSETS=List.of("css/common.css","css/actor-detail.css","css/local-detail.css",
-        "css/video-player.css","css/local-player.css","video-player.js","timeline-preview.js",
+        "css/video-player.css","css/local-player.css","css/filmography-view.css","video-player.js","timeline-preview.js","film-preview.js",
         "vendor/hls.js/hls.min.js","vendor/hls.js/LICENSE","images/profile-placeholder.png","images/film-placeholder.png",
         "icons/instagram.svg","icons/youtube.svg","icons/tiktok.svg","icons/link.svg","icons/simple-icons-LICENSE.txt","icons/bootstrap-icons-LICENSE.txt");
 
@@ -97,7 +97,7 @@ public class PortfolioExportService {
             }
             json.writeValue(site.resolve("portfolio.json").toFile(),data);
             for(String name:ASSETS)copyAsset(name,site);
-            for(String name:List.of("index.html","public-profile.js","public.css")) {
+            for(String name:List.of("index.html","public-profile.js","public.css","filmography.html","public-filmography.js","public-film-card.js")) {
                 try(var in=new ClassPathResource("public-portfolio/"+name).getInputStream()){Files.copy(in,site.resolve(name));}
             }
             String player;
@@ -106,6 +106,11 @@ public class PortfolioExportService {
                 .replace("<html lang=\"ko\">","<html lang=\"ko\" data-public-portfolio=\"true\">")
                 .replace("href=\"/","href=\"").replace("src=\"/","src=\"");
             Files.writeString(site.resolve("video-player.html"),player);
+            // A new HTML document must not execute cached scripts from an older export.
+            for(String name:List.of("index.html","filmography.html","video-player.html")) {
+                Path html=site.resolve(name);
+                Files.writeString(html,versionAssets(Files.readString(html),id));
+            }
             List<Entry> entries=new ArrayList<>();
             try(var paths=Files.walk(site)){for(Path p:paths.filter(Files::isRegularFile).sorted().toList())entries.add(new Entry(site.relativize(p).toString().replace('\\','/'),Files.size(p)));}
             Result result=new Result(id,Instant.now().toString(),entries.stream().mapToLong(Entry::bytes).sum(),entries.size(),entries);
@@ -121,8 +126,8 @@ public class PortfolioExportService {
         var data=new LinkedHashMap<String,Object>();
         var profile=jdbc.queryForObject("SELECT name,one_line_intro,birth_date,birth_place,portrait FROM profile WHERE id=1",(r,n)->{
             var p=new LinkedHashMap<String,Object>();p.put("name",r.getString(1));p.put("intro",r.getString(2));p.put("birthDate",r.getString(3));p.put("birthPlace",r.getString(4));
-            byte[] portrait=r.getBytes(5);p.put("portrait",portrait==null?"images/profile-placeholder.png":"media/portrait.png");
-            if(portrait!=null)writeImage(site,"portrait.png",portrait);return p;
+            byte[] portrait=r.getBytes(5);p.put("portrait",portrait==null?"images/profile-placeholder.png":writeImage(site,"portrait",portrait,960));
+            return p;
         });
         if(profile.get("name")==null||profile.get("name").toString().isBlank())throw new IllegalStateException("먼저 프로필을 저장해 주세요.");
         profile.put("sns",jdbc.query("SELECT type,url FROM profile_sns ORDER BY position",(r,n)->Map.of("type",r.getString(1),"url",r.getString(2))));
@@ -132,7 +137,7 @@ public class PortfolioExportService {
             if(!r.getString(1).isBlank())contact.put("email",r.getString(1));
             return contact;
         }));
-        data.put("photos",jdbc.query("SELECT image FROM gallery_photo ORDER BY position,id",(r,n)->{String name="photo-"+n+".png";writeImage(site,name,r.getBytes(1));return "media/"+name;}));
+        data.put("photos",jdbc.query("SELECT image FROM gallery_photo ORDER BY position,id",(r,n)->writeImage(site,"photo-"+n,r.getBytes(1),1600)));
         data.put("films",jdbc.query("SELECT * FROM filmography_item ORDER BY position,id",(r,n)->{
             String filmId=r.getString("id"),publicId="film-"+n;
             var film=new LinkedHashMap<String,Object>();film.put("id",publicId);film.put("title",r.getString("title"));film.put("year",r.getObject("release_year"));
@@ -140,8 +145,10 @@ public class PortfolioExportService {
             film.put("characterName",r.getString("character_name"));film.put("castType",r.getString("cast_type"));film.put("ageRating",r.getString("age_rating"));
             var thumbnails=jdbc.query("SELECT image FROM filmography_thumbnail WHERE film_id=?",(row,i)->row.getBytes(1),filmId);
             film.put("thumbnail","images/film-placeholder.png");
-            if(!thumbnails.isEmpty()){writeImage(site,publicId+".png",thumbnails.get(0));film.put("thumbnail","media/"+publicId+".png");}
-            var videos=jdbc.queryForList("SELECT id FROM local_video WHERE film_id=?",String.class,filmId);
+            if(!thumbnails.isEmpty())film.put("thumbnail",writeImage(site,publicId,thumbnails.get(0),640));
+            for(boolean trailer:List.of(false,true)){
+            String mediaId=publicId+(trailer?"-trailer":"");
+            var videos=jdbc.queryForList(trailer?"SELECT video_id FROM filmography_trailer WHERE film_id=?":"SELECT id FROM local_video WHERE film_id=?",String.class,filmId);
             if(!videos.isEmpty()){
                 try {
                     Path manifest=Objects.requireNonNull(playback.content(videos.get(0),"index.m3u8").getBody()).getFile().toPath();
@@ -155,16 +162,21 @@ public class PortfolioExportService {
                         if(!line.matches("segment-[0-9]{5,10}\\.ts"))throw new IOException("Invalid segment");names.add(line);
                     }
                     if(names.size()<2)throw new IOException("Empty manifest");
-                    for(String name:names){Path path=Objects.requireNonNull(playback.content(videos.get(0),name).getBody()).getFile().toPath();copies.add(new Copy(path,site.resolve("media/"+publicId+"/"+name),Files.size(path)));}
-                    film.put("manifestUrl","media/"+publicId+"/index.m3u8");
+                    for(String name:names){Path path=Objects.requireNonNull(playback.content(videos.get(0),name).getBody()).getFile().toPath();copies.add(new Copy(path,site.resolve("media/"+mediaId+"/"+name),Files.size(path)));}
+                    film.put(trailer?"trailerUrl":"manifestUrl","media/"+mediaId+"/index.m3u8");
                 } catch(Exception e){throw new IllegalStateException("연결된 영상의 인코딩이 완료되지 않았거나 결과 파일이 없습니다. 필모그래피에서 확인해 주세요.");}
+            }
             }
             return film;
         }));
         return data;
     }
     private static List<String> split(String value){return value.isEmpty()?List.of():List.of(value.split("\n"));}
-    private void writeImage(Path site,String name,byte[] bytes){try{Files.createDirectories(site.resolve("media"));Files.write(site.resolve("media").resolve(name),bytes);}catch(IOException e){throw new UncheckedIOException(e);}}
+    static String versionAssets(String html,String version){
+        return java.util.regex.Pattern.compile("((?:src|href)=\")([A-Za-z0-9_./-]+\\.(?:js|css))(\")")
+            .matcher(html).replaceAll("$1$2?v="+version+"$3");
+    }
+    private String writeImage(Path site,String name,byte[] bytes,int maxEdge){try{return PublicImageWriter.write(site,name,bytes,maxEdge);}catch(IOException e){throw new UncheckedIOException(e);}}
     private void copyAsset(String name,Path site)throws IOException{
         Path target=site.resolve(name);Files.createDirectories(target.getParent());
         try(var in=new ClassPathResource("static/"+name).getInputStream()){

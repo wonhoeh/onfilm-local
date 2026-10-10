@@ -1,5 +1,16 @@
 (() => {
   const $ = id => document.getElementById(id);
+  try{
+    if(sessionStorage.getItem('onfilm.filmographySaved')==='1'||sessionStorage.getItem('onfilm.gallerySaved')==='1'){
+      sessionStorage.removeItem('onfilm.filmographySaved');
+      sessionStorage.removeItem('onfilm.gallerySaved');
+      const toast=document.createElement('div');toast.className='save-toast';toast.setAttribute('role','status');toast.setAttribute('aria-live','polite');
+      document.body.append(toast);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{toast.textContent='저장되었습니다.';toast.classList.add('show');}));
+      setTimeout(()=>toast.classList.remove('show'),2400);
+      setTimeout(()=>toast.remove(),2800);
+    }
+  }catch{}
   let busy=false, galleryBusy=false, photos=[], photoIndex=0, returnFocus=null;
   const menu=$('profileEditOverlay'), lightbox=$('lightbox');
   function showMenu() { returnFocus=document.activeElement;menu.hidden=false;menu.classList.add('show');$('profileSettingsBtn').setAttribute('aria-expanded','true');$('editProfileLink').focus(); }
@@ -32,14 +43,21 @@
   const castLabels={LEAD:'주연',SUPPORTING:'조연',CAMEO:'단역'};
   const ageLabels={ALL:'전체 관람가',AGE_12:'12세 이상',AGE_15:'15세 이상',AGE_18:'청소년 관람불가'};
   function filmArrows(){
-    $('filmPrevBtn').hidden=filmWrapper.scrollLeft<=1;
-    $('filmNextBtn').hidden=filmWrapper.scrollLeft+filmWrapper.clientWidth>=filmWrapper.scrollWidth-1;
+    const enough=$('filmSlider').children.length>3;
+    $('filmPrevBtn').hidden=!enough||filmWrapper.scrollLeft<=1;
+    $('filmNextBtn').hidden=!enough||filmWrapper.scrollLeft+filmWrapper.clientWidth>=filmWrapper.scrollWidth-1;
   }
-  $('filmPrevBtn').addEventListener('click',()=>filmWrapper.scrollBy({left:-filmWrapper.clientWidth,behavior:'smooth'}));
-  $('filmNextBtn').addEventListener('click',()=>filmWrapper.scrollBy({left:filmWrapper.clientWidth,behavior:'smooth'}));
+  function moveFilm(direction){
+    const card=$('filmSlider').firstElementChild;if(!card)return;
+    const gap=parseFloat(getComputedStyle($('filmSlider')).columnGap)||0;
+    filmWrapper.scrollBy({left:direction*(card.getBoundingClientRect().width+gap),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+  }
+  $('filmPrevBtn').addEventListener('click',()=>moveFilm(-1));
+  $('filmNextBtn').addEventListener('click',()=>moveFilm(1));
   filmWrapper.addEventListener('scroll',filmArrows);window.addEventListener('resize',filmArrows);
   async function loadFilms(){
     if(filmBusy)return;filmBusy=true;retryFilms.hidden=true;filmStatus.textContent='필모그래피를 불러오는 중입니다.';
+    window.OnfilmPreview?.close();
     $('filmEmpty').classList.add('hidden');filmWrapper.classList.add('hidden');$('filmSlider').replaceChildren();
     $('filmPrevBtn').hidden=true;$('filmNextBtn').hidden=true;
     try{
@@ -49,23 +67,25 @@
         const frame=document.createElement('div');frame.className='film-poster-frame';const image=document.createElement('img');image.className='film-poster';image.src=films.thumbnailIds?.includes(item.id)?'/api/filmography/'+encodeURIComponent(item.id)+'/thumbnail?v='+films.version:'/images/film-placeholder.png';image.alt='';frame.append(image);
         image.addEventListener('error',()=>{filmStatus.textContent='일부 섬네일을 읽지 못했습니다.';retryFilms.hidden=false;});
         const body=document.createElement('div');body.className='film-body';const title=document.createElement('div');title.className='film-title';title.textContent=item.title;
-        const meta=document.createElement('div');meta.className='film-meta';meta.textContent=[item.year,...item.roles.map(r=>roleLabels[r])].filter(Boolean).join(' · ');body.append(title,meta);card.append(frame,body);
+        const meta=document.createElement('div');meta.className='film-meta';meta.textContent=[item.year,...item.roles.flatMap(r=>r==='ACTOR'?[roleLabels[r],item.characterName?.trim()]:[roleLabels[r]])].filter(Boolean).join(' · ');body.append(title,meta);card.append(frame,body);
         const video=films.videos?.find(v=>v.filmId===item.id);
         const videoText=video?'원본 영상: '+video.name+' · 편집 화면에서 HLS 인코딩을 완료하면 재생할 수 있습니다.':'등록된 원본 영상 없음';
         let opening=false;
         const show=async()=>{
           if(opening)return;
+          window.OnfilmPreview?.close();
           if(video){
             opening=true;
             try{const response=await fetch('/api/videos/'+encodeURIComponent(video.id)+'/playback');if(response.ok){location.href='/video-player.html?videoId='+encodeURIComponent(video.id);return;}}
             catch{notice(item.title,'영상 상태를 확인하지 못했습니다. 다시 눌러 주세요.');return;}
             finally{opening=false;}
           }
-          notice(item.title,[meta.textContent,item.runtime?item.runtime+'분':'',ageLabels[item.ageRating]||'',item.genres.join(' · '),castLabels[item.castType]||'',item.characterName,videoText].filter(Boolean).join(' / '));
+          notice(item.title,[meta.textContent,item.runtime?item.runtime+'분':'',ageLabels[item.ageRating]||'',item.genres.join(' · '),castLabels[item.castType]||'',videoText].filter(Boolean).join(' / '));
         };
         card.addEventListener('click',show);card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();show();}});$('filmSlider').append(card);
+        window.OnfilmPreview?.bind(card,{title:item.title,genres:item.genres,runtime:item.runtime,age:ageLabels[item.ageRating]||'',thumbnail:image.src,trailerId:films.trailers?.find(t=>t.filmId===item.id)?.id,play:show});
       }
-      $('filmEmpty').classList.toggle('hidden',films.items.length>0);filmWrapper.classList.toggle('hidden',films.items.length===0);filmWrapper.scrollLeft=0;filmStatus.textContent='';requestAnimationFrame(filmArrows);
+      $('filmEmpty').classList.toggle('hidden',films.items.length>0);filmWrapper.classList.toggle('hidden',films.items.length===0);filmWrapper.scrollLeft=0;filmStatus.textContent='';filmArrows();
     }catch{filmStatus.textContent='필모그래피를 불러오지 못했습니다.';retryFilms.hidden=false;}
     finally{filmBusy=false;}
   }

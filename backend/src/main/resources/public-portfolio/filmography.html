@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>필모그래피 · OnFilm</title>
+<link rel="stylesheet" href="css/common.css"><link rel="stylesheet" href="css/actor-detail.css"><link rel="stylesheet" href="css/local-detail.css"><link rel="stylesheet" href="public.css"><link rel="stylesheet" href="css/filmography-view.css">
+<script src="vendor/hls.js/hls.min.js" defer></script><script src="film-preview.js" defer></script><script src="public-film-card.js" defer></script><script src="public-filmography.js" defer></script>
+</head><body>
+<header><div class="container header-row"><a class="logo" href="index.html">OnFilm</a></div></header>
+<main class="container filmography-view">
+<a href="index.html" id="backToProfile" class="back-link">← 프로필</a>
+<div class="film-section-heading"><h1>FILMOGRAPHY</h1></div>
+<p id="filmsStatus" role="status">필모그래피를 불러오는 중입니다.</p><button type="button" class="btn" id="retryFilms" hidden>다시 읽기</button>
+<div id="filmGroups" hidden>
+<section aria-labelledby="videoHeading"><h2 id="videoHeading">출연 영상 <span id="videoCount"></span></h2><div class="film-grid" id="videoFilms"></div><p class="group-empty" id="videoEmpty">등록된 출연 영상이 없습니다.</p></section>
+<section aria-labelledby="experienceHeading"><h2 id="experienceHeading">출연 이력 <span id="experienceCount"></span></h2><div class="film-grid" id="experienceFilms"></div><p class="group-empty" id="experienceEmpty">영상 없이 등록한 작품이 없습니다.</p></section>
+</div></main>
+<dialog id="details" aria-labelledby="detailsTitle"><h2 id="detailsTitle"></h2><p id="detailsText"></p><button type="button" class="btn" id="detailsClose">닫기</button></dialog>
+</body></html>

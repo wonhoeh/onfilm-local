@@ -35,6 +35,7 @@ function createExportActions({dataDir,origin,token,chooseDestination,openDirecto
     finally{busy=false;}
   }
   return {
+    get busy(){return busy;},
     usage(){return perform(async()=>({status:'measured',...await storageUsage(dataDir)}));},
     trash(id){return perform(async()=>{
       const site=await resolveExport(id),folder=path.dirname(site),before=await fs.lstat(folder);

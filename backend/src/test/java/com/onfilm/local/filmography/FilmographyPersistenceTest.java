@@ -42,6 +42,9 @@ class FilmographyPersistenceTest extends LocalPersistenceTest {
     @Test void invalidFieldsAndPartialWritesRollBack() {
         try(var context=start()) {
             var api=context.getBean(FilmographyController.class);
+            var tooManyGenres=new FilmographyController.Item(null,"장르 초과",2026,1,"ALL",List.of(),List.of("액션","드라마","스릴러","코미디"),"","");
+            assertThatThrownBy(()->api.update(new FilmographyController.Update(0,List.of(tooManyGenres)))).isInstanceOf(ResponseStatusException.class);
+            assertThat(api.get().version()).isZero();
             var invalid=new FilmographyController.Item(null,"잘못된 작품",2026,1,"ALL",List.of("DIRECTOR"),List.of("드라마"),"LEAD","배역");
             assertThatThrownBy(()->api.update(new FilmographyController.Update(0,List.of(item(null,"먼저 추가"),invalid)))).isInstanceOf(ResponseStatusException.class);
             assertThat(api.get().version()).isZero();assertThat(api.get().items()).isEmpty();

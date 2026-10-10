@@ -7,6 +7,7 @@
         <link rel="stylesheet" href="/css/common.css">
         <link rel="stylesheet" href="/css/actor-detail.css">
 <link rel="stylesheet" href="/css/local-detail.css">
+<link rel="stylesheet" href="/css/notifications.css"><script src="/notifications.js" defer></script>
 </head>
 
 <body>
@@ -60,7 +61,7 @@
 
         <!-- FILMOGRAPHY -->
         <section class="filmography-section" id="filmographySection">
-            <h2>FILMOGRAPHY</h2>
+            <div class="film-section-heading"><h2>FILMOGRAPHY</h2><a href="/filmography.html" id="moreFilmography">더보기 ›</a></div>
 
             <div class="film-slider-container" id="filmSliderContainer">
 
@@ -180,5 +181,7 @@
 <img id="lightboxImage" class="gallery-lightbox-image" alt="사진 크게 보기">
 <button id="nextPhoto" class="gallery-lightbox-arrow right" aria-label="다음 사진">›</button>
 <button id="closeLightbox" class="local-lightbox-close btn">닫기</button></div>
+<script src="/vendor/hls.js/hls.min.js" defer></script>
+<script src="/film-preview.js" defer></script>
 <script src="/profile.js" defer></script>
 </body></html>

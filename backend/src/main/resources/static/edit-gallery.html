@@ -5,21 +5,19 @@
   <title>사진 갤러리 편집 – OnFilm Local</title>
   <link rel="stylesheet" href="/css/common.css"><link rel="stylesheet" href="/css/edit-gallery.css"><link rel="stylesheet" href="/css/local-gallery.css">
   <script src="/gallery.js" defer></script>
+<link rel="stylesheet" href="/css/notifications.css"><script src="/notifications.js" defer></script>
 </head>
 <body class="ui-body bg-fixed"><div class="page-shell centered">
   <header class="top-header"><div class="header-inner page-inner"><a href="/profile.html" class="back-link">← 프로필로 돌아가기</a><div class="header-title">사진 갤러리 편집</div></div></header>
   <main class="page-main"><section class="edit-card card-surface">
-    <div><h1 class="section-title">사진 갤러리</h1><p class="section-hint">촬영 스틸컷 등 배우의 이미지를 보여줄 사진을 추가해 주세요. 이 PC에만 저장됩니다.</p></div>
+    <div><h1 class="section-title">사진 갤러리</h1><p class="section-hint">촬영 스틸컷 등 배우의 이미지를 보여줄 사진을 추가해 주세요.</p></div>
     <section id="uploadArea" class="upload-area">
-      <div class="upload-icon" aria-hidden="true">📷</div>
-      <p class="upload-main-text">여기로 사진을 끌어 놓거나 파일을 선택하세요.</p>
-      <p class="upload-sub-text">최대 12장 · 각 JPEG/PNG 5MB 이하 · 큰 사진은 긴 변 2,048px로 자동 축소 · 원본 파일은 그대로 유지됩니다.</p>
-      <div class="upload-actions"><button type="button" id="browseBtn" class="btn pill primary" disabled>파일 선택</button></div>
+      <svg class="upload-drop-icon" viewBox="0 0 32 32" role="img" aria-label="사진 드래그 앤 드롭"><path d="M16 4v16 M10 14l6 6 6-6 M5 20v7h22v-7"/></svg>
+      <div class="upload-actions"><button type="button" id="browseBtn" disabled>파일 선택</button></div>
       <input id="gallery-files" class="hidden-input" type="file" accept="image/jpeg,image/png" multiple disabled aria-label="갤러리 사진 선택">
     </section>
-    <section class="gallery-wrapper"><div class="gallery-toolbar"><span id="photoCountText">사진 확인 중</span><span>앞으로·뒤로 버튼으로 순서를 바꿀 수 있어요.</span></div><div id="gallery" class="gallery-grid"></div><p id="emptyHint" class="empty-hint" hidden>아직 업로드된 사진이 없습니다.</p></section>
-    <p class="section-hint">추가·순서 변경·삭제는 즉시 저장됩니다. 여러 장 중 실패하면 앞서 저장한 사진은 유지됩니다.</p>
-    <p id="gallery-status" role="status" aria-live="polite">갤러리를 불러오는 중입니다.</p>
-    <div class="form-actions"><button id="gallery-reload" type="button" class="ghost-btn">저장된 사진 다시 읽기</button><a href="/profile.html" class="primary-btn">완료 · 프로필 보기</a></div>
+    <section class="gallery-wrapper"><div class="gallery-toolbar"><span id="photoCountText">사진 확인 중</span></div><div id="gallery" class="gallery-grid"></div><p id="emptyHint" class="empty-hint" hidden>아직 업로드된 사진이 없습니다.</p></section>
+    <p id="gallery-status" role="status" aria-live="polite"></p><button id="gallery-retry" type="button" class="ghost-btn" hidden>다시 읽기</button>
+    <div class="form-actions"><a href="/profile.html" class="ghost-btn">취소</a><button id="gallery-save" type="button" class="primary-btn" disabled>저장</button></div>
   </section></main><footer>© 2026 OnFilm · Local Portfolio</footer>
 </div></body></html>

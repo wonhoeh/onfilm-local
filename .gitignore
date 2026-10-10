@@ -20,6 +20,8 @@ Desktop.ini
 **/.env.*
 !**/.env.example
 .aws/
+/cloudflare/security key/
+*.connections/
 *.p12
 *.pfx
 *.jks

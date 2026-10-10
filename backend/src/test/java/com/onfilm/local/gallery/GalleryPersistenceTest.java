@@ -8,6 +8,37 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
 class GalleryPersistenceTest extends LocalPersistenceTest {
+    @Test void stagedRotationAtomicSaveAndRestart()throws Exception {
+        var image=new java.awt.image.BufferedImage(3,2,java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        image.setRGB(0,0,0xffff0000);image.setRGB(2,1,0xff0000ff);
+        var out=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(image,"png",out);
+        var file=new MockMultipartFile("file","photo.png","image/png",out.toByteArray());
+        String draft,id;
+        try(var context=start()){
+            var api=context.getBean(GalleryController.class);draft=api.stage(file).id();
+            assertThat(api.get().ids()).isEmpty();assertThat(api.get().version()).isZero();
+            assertThatThrownBy(()->api.save(new GalleryController.Edit(0,List.of(new GalleryController.Photo(null,draft,1),new GalleryController.Photo("missing",null,0))))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+            assertThat(api.get().ids()).isEmpty();assertThat(api.get().version()).isZero();assertThat(api.draftImage(draft).getBody()).isNotEmpty();
+        }
+        try(var context=start()){
+            var api=context.getBean(GalleryController.class);
+            id=api.save(new GalleryController.Edit(0,List.of(new GalleryController.Photo(null,draft,1)))).ids().get(0);
+            var rotated=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(api.image(id).getBody()));
+            assertThat(rotated.getWidth()).isEqualTo(2);assertThat(rotated.getHeight()).isEqualTo(3);
+            assertThat(rotated.getRGB(1,0)).isEqualTo(0xffff0000);assertThat(rotated.getRGB(0,2)).isEqualTo(0xff0000ff);
+            assertThatThrownBy(()->api.save(new GalleryController.Edit(0,List.of()))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+            assertThatThrownBy(()->api.save(new GalleryController.Edit(1,List.of(new GalleryController.Photo(id,null,1),new GalleryController.Photo(id,null,0))))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+            assertThat(api.get().version()).isEqualTo(1);
+            for(int i=0;i<3;i++)api.save(new GalleryController.Edit(api.get().version(),List.of(new GalleryController.Photo(id,null,1))));
+            var restored=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(api.image(id).getBody()));
+            assertThat(restored.getWidth()).isEqualTo(3);assertThat(restored.getHeight()).isEqualTo(2);
+            assertThat(restored.getRGB(0,0)).isEqualTo(0xffff0000);assertThat(restored.getRGB(2,1)).isEqualTo(0xff0000ff);
+        }
+        try(var context=start()){
+            var api=context.getBean(GalleryController.class);assertThat(api.get().ids()).containsExactly(id);
+            api.save(new GalleryController.Edit(api.get().version(),List.of()));assertThat(api.get().ids()).isEmpty();
+        }
+    }
     @Test
     void galleryOrderFailuresLimitAndDeletePersist() throws Exception {
         var output = new java.io.ByteArrayOutputStream();

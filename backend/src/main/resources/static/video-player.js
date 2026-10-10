@@ -5,6 +5,9 @@
   const container = document.querySelector('.player-container');
   const videoId = new URLSearchParams(location.search).get('videoId') || '';
   const publicPortfolio = document.documentElement.dataset.publicPortfolio === 'true';
+  // Accept only a known entry point, never a user-supplied redirect URL.
+  const fromFilmography = new URLSearchParams(location.search).get('from') === 'filmography';
+  const backUrl = publicPortfolio ? (fromFilmography ? 'filmography.html' : 'index.html') : fromFilmography ? '/filmography.html' : '/profile.html';
   const preview = window.createTimelinePreview(video);
   let autoplayPending = false;
   let hls = null, generation = 0, timeout = null, failed = false;
@@ -78,7 +81,7 @@
   const duration = () => Number.isFinite(video.duration) ? video.duration : 0;
   const seek = time => { if (!failed && duration()) video.currentTime = Math.max(0, Math.min(duration(), time)); };
   function flash(id) { const el = $(id); el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 500); }
-  button('backBtn', '프로필로 돌아가기', () => { location.href = publicPortfolio ? 'index.html' : '/profile.html'; });
+  button('backBtn', fromFilmography ? '필모그래피로 돌아가기' : '프로필로 돌아가기', () => { location.href = backUrl; });
   button('playPause', '재생', toggle);
   $('playPause').title = '재생/일시정지 (Space 또는 K)';
   $('playPause').setAttribute('aria-keyshortcuts', 'Space K');

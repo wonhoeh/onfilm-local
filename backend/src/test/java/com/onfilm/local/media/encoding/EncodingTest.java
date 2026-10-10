@@ -32,6 +32,10 @@ class EncodingTest extends LocalPersistenceTest {
             var playback=ctx.getBean(PlaybackController.class);String requestedId=videoId;
             assertThatThrownBy(()->playback.playback(requestedId)).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
             jobs.runNext();assertThat(jobs.list().get(0).status()).isEqualTo("DONE");assertThat(jobs.list().get(0).attempts()).isEqualTo(1);
+            assertThat(jobs.list().get(0).progress()).isEqualTo(100);
+            var inbox=ctx.getBean(com.onfilm.local.notification.NotificationController.class).list();
+            assertThat(inbox.unread()).isEqualTo(1);
+            assertThat(inbox.items().get(0).message()).contains("영상 인코딩 완료","test.mp4");
             Path output=jobs.output(jobId,1);assertThat(Files.readString(output.resolve("index.m3u8"))).contains("#EXT-X-ENDLIST","segment-00000.ts");
             assertThat(Files.size(output.resolve("segment-00000.ts"))).isPositive();
             assertThat(playback.playback(videoId).title()).isEqualTo("인코딩");
@@ -43,10 +47,16 @@ class EncodingTest extends LocalPersistenceTest {
             assertThatThrownBy(()->playback.content(requestedId,"segment-99999.ts")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
             assertThatThrownBy(()->playback.playback("../outside")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
             assertThat(jobs.request(videoId).status()).isEqualTo("DONE");jobs.runNext();assertThat(jobs.list().get(0).attempts()).isEqualTo(1);
+            assertThat(ctx.getBean(com.onfilm.local.notification.NotificationController.class).list().items()).hasSize(1);
             assertThat(Files.readAllBytes(original)).isEqualTo(before);
         }
         try(var ctx=start()){
             var job=ctx.getBean(EncodingService.class).list().get(0);assertThat(job.id()).isEqualTo(jobId);assertThat(job.status()).isEqualTo("DONE");
+            assertThat(job.progress()).isEqualTo(100);
+            var notifications=ctx.getBean(com.onfilm.local.notification.NotificationController.class);
+            assertThat(notifications.list().unread()).isEqualTo(1);
+            notifications.read(new com.onfilm.local.notification.NotificationController.ReadRequest(notifications.list().items().get(0).id()));
+            assertThat(notifications.list().unread()).isZero();
             var playback=ctx.getBean(PlaybackController.class);assertThat(playback.playback(videoId).title()).isEqualTo("인코딩");
             var jdbc=ctx.getBean(JdbcTemplate.class);jdbc.update("UPDATE local_video SET film_id=NULL WHERE id=?",videoId);
             assertThatThrownBy(()->playback.playback(videoId)).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
@@ -60,6 +70,8 @@ class EncodingTest extends LocalPersistenceTest {
             String film=films.update(new FilmographyController.Update(0,List.of(new FilmographyController.Item(null,"불량 영상",null,null,"",List.of(),List.of(),"","")))).items().get(0).id();
             byte[] fake=new byte[100];fake[4]='f';fake[5]='t';fake[6]='y';fake[7]='p';videos.upload(film,1,"fake.mp4",100,new java.io.ByteArrayInputStream(fake));
             id=videos.list().get(0).id();jobs.request(id);jobs.runNext();assertThat(jobs.list().get(0).status()).isEqualTo("FAILED");
+            assertThat(jobs.list().get(0).progress()).isLessThan(100);
+            assertThat(ctx.getBean(com.onfilm.local.notification.NotificationController.class).list().items()).isEmpty();
             jobs.request(id);assertThat(jobs.list().get(0).status()).isEqualTo("QUEUED");
         }
         try(var ctx=start()){
@@ -77,5 +89,14 @@ class EncodingTest extends LocalPersistenceTest {
         assertThatThrownBy(()->encoder.encode(input,temporary.resolve("output"))).isInstanceOf(FfmpegEncoder.Failure.class).hasMessageContaining("실행할 수 없습니다");
         Path output=temporary.resolve("invalid");Files.createDirectories(output);Files.writeString(output.resolve("index.m3u8"),"#EXTM3U\n../outside.ts\n#EXT-X-ENDLIST\n");
         assertThatThrownBy(()->encoder.validateOutput(output)).isInstanceOf(FfmpegEncoder.Failure.class);
+    }
+    @Test void progressUsesMicrosecondsAndReservesCompletionForValidation(){
+        assertThat(FfmpegEncoder.progressPercent("out_time_us=5000000",10)).isEqualTo(50);
+        assertThat(FfmpegEncoder.progressPercent("out_time_us=10000000",10)).isEqualTo(99);
+        assertThat(FfmpegEncoder.progressPercent("out_time_us=20000000",10)).isEqualTo(99);
+        assertThat(FfmpegEncoder.progressPercent("out_time_us=-10",10)).isZero();
+        assertThat(FfmpegEncoder.progressPercent("out_time_us=N/A",10)).isEqualTo(-1);
+        assertThat(FfmpegEncoder.progressPercent("progress=end",10)).isEqualTo(-1);
+        assertThat(FfmpegEncoder.progressPercent("out_time_us=1",0)).isEqualTo(-1);
     }
 }
