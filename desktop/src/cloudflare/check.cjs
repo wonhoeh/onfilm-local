@@ -1,11 +1,12 @@
 const {S3Client, ListObjectsV2Command} = require('@aws-sdk/client-s3');
+const {createPublicationClient}=require('./publication-client.cjs');
 
 function failure(service, error, signal) {
   const status = error?.$metadata?.httpStatusCode || error?.status;
   let message = '네트워크 연결을 확인한 뒤 다시 시도해 주세요.';
   if (signal.aborted) message = '연결 확인 시간이 초과됐습니다. 다시 시도해 주세요.';
   else if (status === 401 || status === 403) message = '키와 해당 계정·버킷에 대한 권한을 확인해 주세요.';
-  else if (status === 404) message = service === 'r2' ? '버킷 이름과 Account ID를 확인해 주세요.' : 'Pages 프로젝트 이름과 Account ID를 확인해 주세요.';
+  else if (status === 404) message = service !== 'pages' ? '버킷 이름과 Account ID를 확인해 주세요.' : 'Pages 프로젝트 이름과 Account ID를 확인해 주세요.';
   else if (status === 429) message = '요청이 많습니다. 잠시 후 다시 확인해 주세요.';
   return {service, ok:false, message};
 }
@@ -35,8 +36,12 @@ function createConnectionChecker({makeS3 = options => new S3Client(options), fet
         return {service:'pages', ok:true, message:'Pages 프로젝트 조회 연결을 확인했습니다.'};
       },
     ];
+    if(config.r2ManagementToken)tasks.push(async()=>{
+      await createPublicationClient({fetchImpl})(config,signal).publicAccess.read();
+      return {service:'r2Management',ok:true,message:'공개 설정 조회를 확인했습니다. 변경 권한은 게시 종료 실행 시 확인됩니다.'};
+    });
     const results = await Promise.allSettled(tasks.map(task => task()));
-    return results.map((result, index) => result.status === 'fulfilled' ? result.value : failure(index === 0 ? 'r2' : 'pages', result.reason, signal));
+    return results.map((result, index) => result.status === 'fulfilled' ? result.value : failure(['r2','pages','r2Management'][index], result.reason, signal));
   };
 }
 module.exports = {createConnectionChecker};

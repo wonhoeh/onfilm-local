@@ -1,5 +1,32 @@
 # Windows 설치형 앱 준비
 
+## 권장: 명령어 하나로 설치 파일 만들기
+
+최종 사용자는 **Setup.exe 설치 → 바탕화면 OnFilm Local 실행**만 한다. Java, Node.js, npm, Electron, FFmpeg 별도 설치 및 환경변수 설정은 필요 없다. Electron·Java 런타임·API JAR·FFmpeg를 동봉한다. 로컬 편집과 인코딩은 오프라인으로 가능하며 Cloudflare 연결·게시는 인터넷이 필요하다.
+
+설치 파일을 만드는 **개발자 PC만** Windows x64, Node.js 22.12 이상, JDK 21이 필요하다. `JAVA_HOME`을 JDK 21 폴더로 지정한다. 동봉 JRE는 실행용이므로 빌드용 JDK를 대신하지 않는다.
+
+Windows PowerShell, `desktop` 폴더에서:
+
+```powershell
+# 처음 받거나 package-lock.json이 변경된 경우
+npm.cmd ci
+# 설치 파일 생성
+npm.cmd run release:win
+```
+
+자동 순서: JDK 확인 → backend check/bootJar → Node 테스트 → Windows 런타임 준비·해시 검사 → 최신 JAR 동봉·manifest 갱신 → Setup.exe 생성. PATH의 Java 11 대신 JAVA_HOME의 JDK로 Gradle Wrapper를 직접 실행하고 Gradle Java 경로도 지정한다. 시스템 프로그램 설치나 환경변수 영구 변경은 하지 않는다.
+
+결과: `desktop/dist/windows-release-고유값/installer/OnFilm-Local-버전-x64-Setup.exe`. 완료 시 정확한 경로가 표시된다. 사용자에게는 **Setup.exe 하나만 전달**한다. 소스 ZIP이나 npm 명령을 안내할 필요 없다. 자동 업데이트는 없으며 새 버전은 새 설치 파일로 설치한다.
+
+- 기존 runtime은 검증 후 복사하고 보존한다. 별도 번들에 최신 JAR를 넣으므로 과거 JAR 동봉을 방지한다. 검증 전용 backend 빌드로 개발 앱 JAR도 덮어쓰지 않는다.
+- 매번 새 출력 폴더를 사용해 이전 win-unpacked 잠금과의 충돌을 피한다. 이전/실패 빌드 폴더는 자동 삭제하지 않으므로 공간이 필요하다. 확인 후 불필요한 `dist/windows-release-*`만 수동 정리한다. 앱 사용자 데이터는 건드리지 않는다.
+- 최초 런타임 준비는 다운로드가 필요하다. 기존 번들 손상이나 다운로드 해시 불일치는 자동 수정하지 않고 중단한다.
+- 중복 빌드는 잠금으로 거부한다. 강제 종료 후에는 진행 중인 빌드가 없는지 확인하고 `desktop/dist/.windows-release.lock`만 제거한다.
+- 코드 서명·재배포 라이선스 검토와 개발 도구 없는 Windows 실기기 테스트는 별도 작업이다. 현재는 개발/검증용 설치본이며 외부 업로드는 하지 않는다.
+
+아래 개별 명령은 수동 진단용이다. 일반 설치본 생성은 위 `release:win`을 권장한다.
+
 ## 현재 범위
 
 2026-10-04: 동봉 실행 파일 경로 선택과 누락 검사, electron-builder 26.15.3 기반 NSIS 설정, Windows 런타임 다운로드/검증/manifest 생성까지 구현했다. 실제 Java/FFmpeg와 API JAR를 runtime/windows-x64에 준비했다(362개 파일, 약 490MiB). 설치 파일 생성 실행과 코드 서명, Windows 실행 검증은 아직 완료하지 않았다. 최초 대상은 Windows x64로 준비하며 ARM64는 별도 빌드/검증 전 지원하지 않는다.
@@ -75,10 +102,10 @@ npm run dist:win
 
 DB와 사용자 미디어는 기존 OS 사용자 데이터 폴더에 유지한다. 설치 폴더에 넣거나 빌드 결과에 포함하지 않는다. 기존 사용자 데이터를 초기화/이관하지 않는다. 실행별 토큰/Host/Origin 및 단일 실행 잠금은 유지한다.
 
-## 다음 구현 순서
+## Windows 실기기·배포 전 확인 목록
 
-1. Windows x64 Java 21 런타임과 FFmpeg/ffprobe 배포본의 출처·버전·해시·라이선스/고지 자료 확정. 자동 다운로드나 시스템 설치는 아직 하지 않는다.
-2. 설치 파일 생성 도구 및 고정 버전 구성. 코드와 별도 runtime 파일만 포함하고 DB/미디어/테스트 데이터/비밀값은 제외.
+1. 고정 해시 자동 다운로드는 구현됨. Java/FFmpeg 재배포 라이선스·대응 소스/빌드 정보 검토를 완료하고 서명 여부 결정.
+2. `release:win`을 Windows x64에서 실행해 최신 JAR 포함 및 Setup.exe 생성 확인. 코드/runtime만 포함하고 DB/미디어/비밀값 제외 확인.
 3. Windows에서 각 바이너리 실행, Java API 시작·FFmpeg 인코딩 및 HLS 재생 확인. Mac 파일을 Windows 런타임으로 사용하지 않는다.
 4. 개발 도구/Java/FFmpeg를 설치하지 않은 Windows 사용자 계정에서 설치→아이콘 실행→편집→종료→재시작 검증.
 5. 앱 업데이트/제거 후 사용자 데이터 보존, 종료 중 인코딩, 포트 충돌, 백업·복원, ZIP/휴지통, 한글 경로, 설치 권한, 백신/SmartScreen 확인.

@@ -7,15 +7,35 @@
   const publicPortfolio = document.documentElement.dataset.publicPortfolio === 'true';
   // Accept only a known entry point, never a user-supplied redirect URL.
   const fromFilmography = new URLSearchParams(location.search).get('from') === 'filmography';
-  const backUrl = publicPortfolio ? (fromFilmography ? 'filmography.html' : 'index.html') : fromFilmography ? '/filmography.html' : '/profile.html';
+  const fromEditor = !publicPortfolio && new URLSearchParams(location.search).get('from') === 'edit-filmography';
+  const backUrl = publicPortfolio ? (fromFilmography ? 'filmography.html' : 'index.html') : fromEditor ? '/edit-filmography.html' : fromFilmography ? '/filmography.html' : '/profile.html';
   const preview = window.createTimelinePreview(video);
   let autoplayPending = false;
   let hls = null, generation = 0, timeout = null, failed = false;
+  let uiTimer;
+  function showControls() {
+    clearTimeout(uiTimer);
+    container.classList.remove('ui-idle');
+    if (video.paused || video.ended || !$('playerStatus').hidden) return;
+    uiTimer = setTimeout(() => {
+      const interacting = container.querySelector(window.matchMedia?.('(hover: none)').matches ? ':focus-visible' : '.controls:hover, .timeline:hover, .top-left-info:hover, :focus-visible')
+        || $('speedMenu').classList.contains('open') || $('volumePopup').classList.contains('show');
+      if (interacting) { showControls(); return; }
+      container.classList.add('ui-idle');
+    }, 3000);
+  }
+  for (const event of ['pointermove', 'pointerdown', 'pointerup', 'keydown', 'focusin', 'focusout'])
+    container.addEventListener(event, showControls);
+  for (const event of ['play', 'playing', 'pause', 'ended', 'waiting']) video.addEventListener(event, showControls);
+  let orientationLocked=false;
+  function unlockOrientation(){if(orientationLocked){orientationLocked=false;try{window.screen?.orientation?.unlock?.();}catch{}}}
+  document.addEventListener('fullscreenchange',()=>{showControls();if(!document.fullscreenElement)unlockOrientation();});
 
   function status(message, retry = false) {
     $('playerMessage').textContent = message;
     $('playerStatus').hidden = !message;
     $('retryPlayback').hidden = !retry;
+    showControls();
   }
   function fail(message) {
     failed = true;
@@ -26,6 +46,8 @@
     status(message, true);
   }
   function dispose() {
+    unlockOrientation();
+    clearTimeout(uiTimer);
     clearTimeout(timeout);
     preview.destroy();
     if (hls) { hls.destroy(); hls = null; }
@@ -50,8 +72,9 @@
       document.querySelector('.video-title').textContent = info.title;
       document.title = info.title + ' · OnFilm';
       // Never accept a remote/user-supplied source URL.
-      const source = publicPortfolio ? 'media/' + videoId + '/index.m3u8' : '/api/videos/' + videoId + '/hls/index.m3u8';
-      if (info.manifestUrl !== source) throw new Error('영상 주소를 확인할 수 없습니다.');
+      const expectedSource = publicPortfolio ? 'media/' + videoId + '/index.m3u8' : '/api/videos/' + videoId + '/hls/index.m3u8';
+      if (info.manifestUrl !== expectedSource) throw new Error('영상 주소를 확인할 수 없습니다.');
+      const source = publicPortfolio ? new URL(expectedSource, document.baseURI).href : expectedSource;
       preview.setSource(source);
       if (window.Hls?.isSupported()) {
         // Same-frame network requests retain the Electron session's restricted token injection.
@@ -81,27 +104,41 @@
   const duration = () => Number.isFinite(video.duration) ? video.duration : 0;
   const seek = time => { if (!failed && duration()) video.currentTime = Math.max(0, Math.min(duration(), time)); };
   function flash(id) { const el = $(id); el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 500); }
-  button('backBtn', fromFilmography ? '필모그래피로 돌아가기' : '프로필로 돌아가기', () => { location.href = backUrl; });
+  button('backBtn', fromEditor ? '필모 편집으로 돌아가기' : fromFilmography ? '필모그래피로 돌아가기' : '프로필로 돌아가기', () => { location.href = backUrl; });
   button('playPause', '재생', toggle);
   $('playPause').title = '재생/일시정지 (Space 또는 K)';
   $('playPause').setAttribute('aria-keyshortcuts', 'Space K');
   $('timeline').title = '클릭하여 이동 · ←/→ 5초 이동';
   button('back10', '10초 뒤로', () => { seek(video.currentTime - 10); flash('skipLeft'); });
   button('forward10', '10초 앞으로', () => { seek(video.currentTime + 10); flash('skipRight'); });
-  button('volumeBtn', '볼륨 조절', () => { $('volumePopup').classList.toggle('show'); });
+  button('volumeBtn', '음소거', () => { video.muted=!video.muted;if(!video.muted&&video.volume===0)video.volume=1; });
+  let volumeTimer;
+  for(const element of [$('volumeBtn'),$('volumePopup')]){
+    element.addEventListener('mouseenter',()=>{if(window.matchMedia?.('(hover: none)').matches)return;clearTimeout(volumeTimer);$('volumePopup').classList.add('show');showControls();});
+    element.addEventListener('mouseleave',()=>{volumeTimer=setTimeout(()=>{$('volumePopup').classList.remove('show');showControls();},250);});
+  }
   button('speedBtn', '재생 속도 선택', () => { $('speedMenu').classList.toggle('open'); });
   button('fullscreenBtn', '전체 화면 전환', async () => {
-    try { if (document.fullscreenElement) await document.exitFullscreen(); else await container.requestFullscreen(); }
+    try {
+      if(document.fullscreenElement){await document.exitFullscreen();unlockOrientation();}
+      else if(container.requestFullscreen){
+        try{await container.requestFullscreen();}catch(error){if(video.webkitEnterFullscreen){video.webkitEnterFullscreen();return;}throw error;}
+        if(window.matchMedia?.('(pointer: coarse), (max-width:760px)').matches&&window.screen?.orientation?.lock){
+          try{await window.screen.orientation.lock('landscape');orientationLocked=true;if(!document.fullscreenElement)unlockOrientation();}catch{/* Unsupported orientation lock must not interrupt playback. */}
+        }
+      }else if(video.webkitEnterFullscreen)video.webkitEnterFullscreen();
+    }
     catch { status('전체 화면으로 전환할 수 없습니다. 재생 버튼으로 계속 볼 수 있습니다.'); }
   });
   document.addEventListener('keydown', e => {
+    showControls();
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.isComposing
         || e.target.closest?.('input,textarea,select,button,a,[contenteditable="true"]')) return;
     const key = e.key.toLowerCase();
     if (e.code === 'Space' || key === ' ' || key === 'k') {
       e.preventDefault(); if (!e.repeat) void toggle();
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      e.preventDefault(); seek(video.currentTime + (e.key === 'ArrowLeft' ? -5 : 5));
+      e.preventDefault(); seek(video.currentTime + (e.key === 'ArrowLeft' ? -5 : 5));flash(e.key==='ArrowLeft'?'skipLeft':'skipRight');
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault(); video.volume = Math.max(0, Math.min(1, video.volume + (e.key === 'ArrowUp' ? 0.05 : -0.05))); video.muted = false;
     } else if (e.code === 'KeyF' || key === 'f' || key === 'ㄹ') {
@@ -112,7 +149,7 @@
   });
   $('fullscreenBtn').title = '전체 화면 (F)';
   $('fullscreenBtn').setAttribute('aria-keyshortcuts', 'F');
-  $('volumeBtn').title = '볼륨 조절 · M 음소거 · ↑/↓ 볼륨';
+  $('volumeBtn').title = '클릭: 음소거 · M 음소거 · ↑/↓ 볼륨';
   document.querySelectorAll('.speed-option').forEach((el, index) => {
     el.id = 'speedOption' + index;
     button(el.id, el.textContent + ' 재생', () => { video.playbackRate = Number(el.dataset.speed); $('speedBtn').textContent = el.textContent; $('speedMenu').classList.remove('open'); });
@@ -121,7 +158,8 @@
   function volume() {
     const value = video.muted ? 0 : video.volume;
     $('volumeFill').style.height = value * 100 + '%'; $('volumeVertical').value = value;
-    $('icon-sound-on').hidden = value === 0; $('icon-sound-off').hidden = value !== 0;
+    $('icon-sound-on').toggleAttribute('hidden',value===0);$('icon-sound-off').toggleAttribute('hidden',value!==0);
+    $('volumeBtn').setAttribute('aria-label',value===0?'음소거 해제':'음소거');$('volumeBtn').setAttribute('aria-pressed',String(video.muted));
   }
   video.addEventListener('volumechange', volume); volume();
   function time(value) {
@@ -141,9 +179,35 @@
   $('timeline').addEventListener('keydown', e => {
     if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
       e.preventDefault(); seek(e.key === 'Home' ? 0 : e.key === 'End' ? duration() : video.currentTime + (e.key === 'ArrowLeft' ? -5 : 5));
+      if(e.key==='ArrowLeft'||e.key==='ArrowRight')flash(e.key==='ArrowLeft'?'skipLeft':'skipRight');
     }
   });
-  video.addEventListener('click', toggle);
+  // Touch-only double taps on the video surface; controls and timeline keep their own actions.
+  let touchStart=null,lastTap=null,suppressClickUntil=0;
+  video.addEventListener('pointerdown',e=>{
+    if(e.pointerType!=='touch')return;
+    if(!e.isPrimary){touchStart=null;lastTap=null;return;}
+    touchStart={id:e.pointerId,x:e.clientX,y:e.clientY,time:e.timeStamp};
+  });
+  video.addEventListener('pointercancel',()=>{touchStart=null;lastTap=null;});
+  video.addEventListener('pointerup',e=>{
+    if(e.pointerType!=='touch')return;
+    suppressClickUntil=Date.now()+700;
+    const start=touchStart;touchStart=null;
+    if(!start||start.id!==e.pointerId||e.timeStamp-start.time>300||Math.hypot(e.clientX-start.x,e.clientY-start.y)>24){lastTap=null;return;}
+    const box=video.getBoundingClientRect(),side=e.clientX<box.left+box.width/2?'left':'right';
+    if(lastTap&&e.timeStamp-lastTap.time<=320&&lastTap.side===side&&Math.hypot(e.clientX-lastTap.x,e.clientY-lastTap.y)<=48){
+      lastTap=null;e.preventDefault();seek(video.currentTime+(side==='left'?-10:10));flash(side==='left'?'skipLeft':'skipRight');
+    }else lastTap={side,time:e.timeStamp,x:e.clientX,y:e.clientY};
+    $('speedMenu').classList.remove('open');$('volumePopup').classList.remove('show');showControls();
+  });
+  video.addEventListener('click', () => {
+    if(Date.now()<suppressClickUntil)return;
+    if(publicPortfolio&&window.matchMedia?.('(hover: none)').matches){
+      $('speedMenu').classList.remove('open');$('volumePopup').classList.remove('show');showControls();return;
+    }
+    void toggle();
+  });
   video.addEventListener('canplay', () => {
     if (failed) return;
     clearTimeout(timeout); status('');

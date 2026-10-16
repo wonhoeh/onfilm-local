@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>프로필 입력 – OnFilm Local</title>
 <link rel="stylesheet" href="/css/common.css"><link rel="stylesheet" href="/css/edit-profile.css"><link rel="stylesheet" href="/css/local-profile.css">
-<script src="/app.js" defer></script>
+<link rel="stylesheet" href="/css/image-position-editor.css"><script src="/image-position-editor.js" defer></script><script src="/app.js" defer></script>
 <link rel="stylesheet" href="/css/notifications.css"><script src="/notifications.js" defer></script>
 </head>
 <body class="ui-body">
@@ -14,12 +14,12 @@
 <section class="edit-card card-surface" id="profileCard">
 <section class="photo-section" id="photoSection" hidden>
 <button type="button" id="chooseProfilePhoto" class="photo-select" aria-label="프로필 사진 선택" disabled><img id="profilePreview" class="photo-preview" src="/images/profile-placeholder.png" alt="프로필 사진 미리보기"></button>
-<div class="photo-actions"><button type="button" class="pill-btn" id="selectProfileBtn" disabled>사진 선택</button><button type="button" class="pill-btn" id="deleteProfileBtn" disabled>사진 삭제</button></div>
+<div class="photo-actions"><button type="button" class="pill-btn" id="selectProfileBtn" aria-label="사진 선택" title="사진 선택" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></svg></button><button type="button" class="pill-btn" id="deleteProfileBtn" aria-label="사진 삭제" title="사진 삭제" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg></button>
+<button type="button" class="pill-btn" id="positionProfileBtn" aria-label="사진 위치 조정" title="사진 위치 조정" hidden disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4m10-8 4 4-4 4"/></svg></button></div>
 <input type="file" id="profileFileInput" accept="image/jpeg,image/png" hidden disabled>
-<p class="photo-hint">4:5 비율의 선명한 정면 사진을 권장해요.<br>JPG, PNG, 최대 5MB · 클릭 또는 드래그 앤 드롭<br>큰 사진은 긴 변 2,048px로 자동 축소합니다.<br>사진 선택·삭제는 즉시 저장됩니다.</p>
 <p id="photoStatus" class="photo-hint" role="status" aria-live="polite"></p>
 </section><section class="form-section">
-<h1>나의 프로필</h1><p class="field-hint">기본 프로필부터 입력해 주세요. 이 PC에만 저장되며 온라인에 공개되지 않습니다.</p>
+<h1>나의 프로필</h1>
 <form id="editProfileForm"><fieldset id="fields" disabled>
 <div class="field-group"><label for="actorName" class="field-label">이름</label><input id="actorName" class="text-input" maxlength="60" required placeholder="이름 또는 예명"></div>
 <div class="two-col">
@@ -29,6 +29,8 @@
 <input id="birthDay" class="text-input" inputmode="numeric" maxlength="2" placeholder="DD" aria-label="출생 일"><span>일</span>
 </div></div>
 <div class="field-group"><label for="birthPlace" class="field-label">출생</label><input id="birthPlace" class="text-input" maxlength="100" placeholder="예) 서울, 부산, 인천"></div>
+<div class="field-group"><label for="heightCm" class="field-label">키 (cm, 선택)</label><input id="heightCm" class="text-input" type="number" min="0.1" max="300" step="0.1" placeholder="예) 175"></div>
+<div class="field-group"><label for="weightKg" class="field-label">몸무게 (kg, 선택)</label><input id="weightKg" class="text-input" type="number" min="0.1" max="500" step="0.1" placeholder="예) 65"></div>
 </div>
 <div class="field-group"><label for="bioInput" class="field-label">소개글</label><textarea id="bioInput" class="text-input" maxlength="120" rows="4" placeholder="배우로서의 나를 소개해 주세요."></textarea><span class="field-hint">최대 120자</span></div>
 <div class="field-group"><div class="field-label">SNS 링크</div><div class="field-hint">인스타그램, 유튜브, 틱톡 등 최대 10개</div><div id="snsList" class="sns-list"></div><button type="button" id="addSnsBtn" class="sns-add-btn">+ SNS 추가</button></div>

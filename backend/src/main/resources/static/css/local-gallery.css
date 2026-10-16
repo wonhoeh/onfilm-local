@@ -11,7 +11,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .upload-drop-icon { width:36px; height:36px; color:var(--muted); fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
 #browseBtn { padding:4px 10px; font-size:12px; border-radius:999px; border:0; background:rgba(255,255,255,.08); color:var(--text); cursor:pointer; }
 #browseBtn:hover { background:rgba(255,255,255,.16); }
-.photo-preview { position:relative; height:150px; overflow:hidden; }
+.photo-preview { position:relative; height:auto; aspect-ratio:4/5; overflow:hidden; }
 .photo-preview[draggable=true] { cursor:grab; }
 .photo-preview[draggable=true]:active { cursor:grabbing; }
 .photo-preview .photo-thumb { pointer-events:none; user-select:none; }

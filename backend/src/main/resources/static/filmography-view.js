@@ -13,6 +13,8 @@
     const frame=document.createElement('div');frame.className='film-poster-frame';
     const image=document.createElement('img');image.className='film-poster';image.alt='';image.loading='lazy';
     image.src=films.thumbnailIds?.includes(item.id)?'/api/filmography/'+encodeURIComponent(item.id)+'/thumbnail?v='+films.version:'/images/film-placeholder.png';
+    const thumbnailPosition=item.thumbnailPosition||{x:50,y:50};image.style.objectPosition=`${thumbnailPosition.x}% ${thumbnailPosition.y}%`;
+    const mobilePosition=item.mobileThumbnailPosition||{x:50,y:50};image.style.setProperty('--mobile-thumbnail-position',`${mobilePosition.x}% ${mobilePosition.y}%`);
     image.onerror=()=>{image.onerror=null;image.src='/images/film-placeholder.png';};frame.append(image);
     const body=document.createElement('div');body.className='film-body';
     const title=document.createElement('div');title.className='film-title';title.textContent=item.title;
@@ -31,17 +33,18 @@
       }else details(item.title,[participation,item.genres.join(' · '),item.runtime?item.runtime+'분':'',ages[item.ageRating]].filter(Boolean).join('\n')||'등록된 참여 정보가 없습니다.');
     };
     card.addEventListener('click',show);card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();show();}});
-    window.OnfilmPreview?.bind(card,{title:item.title,genres:item.genres,runtime:item.runtime,age:ages[item.ageRating]||'',thumbnail:image.src,trailerId:films.trailers?.find(t=>t.filmId===item.id)?.id,canPlay:!!video,participation:video?'':participation,play:show});
+    window.OnfilmPreview?.bind(card,{title:item.title,genres:item.genres,runtime:item.runtime,age:ages[item.ageRating]||'',thumbnail:image.src,thumbnailPosition,trailerId:films.trailers?.find(t=>t.filmId===item.id)?.id,canPlay:!!video,participation,play:show});
     return {card,video};
   }
   async function load(){
     if(busy)return;busy=true;window.OnfilmPreview?.close();$('retryFilms').hidden=true;$('filmGroups').hidden=true;$('filmsStatus').textContent='필모그래피를 불러오는 중입니다.';
-    $('videoFilms').replaceChildren();$('experienceFilms').replaceChildren();
+    for(const group of ['video','directing','lead','supporting','experience'])$(group+'Films').replaceChildren();
     try{
       const res=await fetch('/api/filmography');if(!res.ok)throw new Error();const films=await res.json();
-      for(const item of films.items){const {card,video}=cardFor(item,films);$(video?'videoFilms':'experienceFilms').append(card);}
-      for(const group of ['video','experience']){const count=$(group+'Films').children.length;$(group+'Count').textContent=count+'편';$(group+'Empty').hidden=count>0;}
-      $('filmGroups').hidden=false;$('filmsStatus').textContent='';
+      // Keep the existing DOM IDs; grouping now follows the selected category, not video presence.
+      for(const item of films.items){const {card}=cardFor(item,films);const group={ACTING:'video',DIRECTING:'directing',LEAD:'lead',SUPPORTING:'supporting',MINOR:'experience'}[item.category]||'video';$(group+'Films').append(card);}
+      for(const group of ['video','directing','lead','supporting','experience']){const count=$(group+'Films').children.length;$(group+'Count').textContent=count+'편';$(group+'Empty').hidden=true;$(group+'Films').closest('section').hidden=count===0;}
+      $('filmGroups').hidden=false;$('filmsStatus').textContent=films.items.length?'':'등록된 작품이 없습니다.';
     }catch{$('filmsStatus').textContent='필모그래피를 불러오지 못했습니다.';$('retryFilms').hidden=false;}
     finally{busy=false;}
   }

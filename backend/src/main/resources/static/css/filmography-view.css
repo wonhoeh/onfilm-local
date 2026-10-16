@@ -11,5 +11,5 @@
 #filmDetails{max-width:520px;width:calc(100% - 48px);box-sizing:border-box;background:var(--panel,#17171e);color:var(--text,#fff);border:1px solid var(--line,#333);border-radius:16px;padding:28px}
 #filmDetails::backdrop{background:#0009}
 #detailsText{white-space:pre-line;overflow-wrap:anywhere;line-height:1.8}
-@media(max-width:760px){.film-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}}
-@media(max-width:480px){.film-grid{grid-template-columns:1fr}.filmography-view h1{font-size:24px}}
+@media(max-width:760px){.film-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.filmography-view .film-poster-frame{aspect-ratio:4/5;height:auto;min-height:0}.filmography-view .film-poster{object-position:var(--mobile-thumbnail-position,50% 50%)!important}.filmography-view .film-body{display:none}}
+@media(max-width:480px){.filmography-view h1{font-size:24px}}

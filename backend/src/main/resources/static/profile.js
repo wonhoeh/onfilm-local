@@ -65,6 +65,7 @@
       for(const item of films.items){
         const card=document.createElement('article');card.className='film-card';card.tabIndex=0;card.setAttribute('role','button');card.setAttribute('aria-label',item.title+' 상세 정보');
         const frame=document.createElement('div');frame.className='film-poster-frame';const image=document.createElement('img');image.className='film-poster';image.src=films.thumbnailIds?.includes(item.id)?'/api/filmography/'+encodeURIComponent(item.id)+'/thumbnail?v='+films.version:'/images/film-placeholder.png';image.alt='';frame.append(image);
+        const thumbnailPosition=item.thumbnailPosition||{x:50,y:50};image.style.objectPosition=`${thumbnailPosition.x}% ${thumbnailPosition.y}%`;
         image.addEventListener('error',()=>{filmStatus.textContent='일부 섬네일을 읽지 못했습니다.';retryFilms.hidden=false;});
         const body=document.createElement('div');body.className='film-body';const title=document.createElement('div');title.className='film-title';title.textContent=item.title;
         const meta=document.createElement('div');meta.className='film-meta';meta.textContent=[item.year,...item.roles.flatMap(r=>r==='ACTOR'?[roleLabels[r],item.characterName?.trim()]:[roleLabels[r]])].filter(Boolean).join(' · ');body.append(title,meta);card.append(frame,body);
@@ -80,10 +81,11 @@
             catch{notice(item.title,'영상 상태를 확인하지 못했습니다. 다시 눌러 주세요.');return;}
             finally{opening=false;}
           }
-          notice(item.title,[meta.textContent,item.runtime?item.runtime+'분':'',ageLabels[item.ageRating]||'',item.genres.join(' · '),castLabels[item.castType]||'',videoText].filter(Boolean).join(' / '));
+          const participation=[item.year,...item.roles.flatMap(r=>r==='ACTOR'?[roleLabels[r],castLabels[item.castType],item.characterName?.trim()]:[roleLabels[r]])].filter(Boolean).join(' · ');
+          notice(item.title,video?'아직 재생할 수 없습니다. 편집 화면에서 영상 파일과 인코딩 상태를 확인해 주세요.':[participation,item.genres.join(' · '),item.runtime?item.runtime+'분':'',ageLabels[item.ageRating]].filter(Boolean).join('\n')||'등록된 참여 정보가 없습니다.');
         };
         card.addEventListener('click',show);card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();show();}});$('filmSlider').append(card);
-        window.OnfilmPreview?.bind(card,{title:item.title,genres:item.genres,runtime:item.runtime,age:ageLabels[item.ageRating]||'',thumbnail:image.src,trailerId:films.trailers?.find(t=>t.filmId===item.id)?.id,play:show});
+        window.OnfilmPreview?.bind(card,{title:item.title,genres:item.genres,runtime:item.runtime,age:ageLabels[item.ageRating]||'',thumbnail:image.src,thumbnailPosition,trailerId:films.trailers?.find(t=>t.filmId===item.id)?.id,canPlay:!!video,participation:meta.textContent,play:show});
       }
       $('filmEmpty').classList.toggle('hidden',films.items.length>0);filmWrapper.classList.toggle('hidden',films.items.length===0);filmWrapper.scrollLeft=0;filmStatus.textContent='';filmArrows();
     }catch{filmStatus.textContent='필모그래피를 불러오지 못했습니다.';retryFilms.hidden=false;}
@@ -124,6 +126,7 @@
       photos.forEach((url,index)=>{
         const wrap=document.createElement('button');wrap.type='button';wrap.className='gallery-item-wrap';wrap.setAttribute('aria-label','사진 '+(index+1)+' 크게 보기');
         const image=document.createElement('img');image.className='gallery-item';image.src=url;image.alt='갤러리 사진 '+(index+1);image.loading='lazy';
+        const position=gallery.positions?.[gallery.ids[index]]||{x:50,y:50};image.style.objectPosition=`${position.x}% ${position.y}%`;
         image.addEventListener('error',()=>{$('galleryViewStatus').textContent='일부 사진을 읽지 못했습니다.';$('retryGallery').hidden=false;});
         wrap.append(image);wrap.addEventListener('click',()=>openPhoto(index));$('galleryGrid').append(wrap);
       });
@@ -144,10 +147,12 @@
       $('profileName').textContent=profile.name;
       const contact=profile.contact||{};
       $('contactSection').hidden=!contact.email?.trim();
+      $('copyContactEmail').hidden=!contact.email?.trim();
       $('contactEmailDisplay').textContent=contact.email||'';
-      $('profileMeta').textContent=(profile.birthDate || '생년월일 미등록')+' · '+(profile.birthPlace || '출생지 미등록');
+      $('profileMeta').replaceChildren(...[[profile.birthDate,profile.birthPlace],[profile.heightCm?Number(profile.heightCm)+' cm':null,profile.weightKg?Number(profile.weightKg)+' kg':null]].filter(values=>values.some(Boolean)).map(values=>{const line=document.createElement('div');line.className='profile-meta-line';for(const text of values.filter(Boolean)){const span=document.createElement('span');span.textContent=text;line.append(span);}return line;}));
       $('bioDisplay').textContent=profile.oneLineIntro || '소개글을 입력해 주세요.';
       $('profilePhoto').src=profile.hasPortrait ? '/api/profile/portrait?v='+profile.version : '/images/profile-placeholder.png';
+      const portraitPosition=profile.portraitPosition||{x:50,y:50};$('profilePhoto').style.objectPosition=`${portraitPosition.x}% ${portraitPosition.y}%`;
       $('profilePhoto').onerror=()=>{$('profilePhoto').onerror=null;$('profilePhoto').src='/images/profile-placeholder.png';};
       $('snsRow').replaceChildren();
       for(const [index,entry] of (profile.snsList || []).entries()){

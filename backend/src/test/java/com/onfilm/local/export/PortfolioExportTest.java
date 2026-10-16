@@ -68,7 +68,7 @@ class PortfolioExportTest extends LocalPersistenceTest {
             assertThat(Files.readString(exports.resource(id,"index.html"))).contains("public-profile.js?v="+id);
             assertThat(Files.readString(exports.resource(id,"filmography.html"))).contains("public-filmography.js?v="+id);
             assertThat(Files.readString(exports.resource(id,"video-player.html"))).contains("video-player.js?v="+id);
-            assertThat(Files.readString(exports.resource(id,"filmography.html"))).contains("출연 영상","출연 이력","public-filmography.js").doesNotContain("/api/","편집","notifications.js");
+            assertThat(Files.readString(exports.resource(id,"filmography.html"))).contains("단편","연출","주연","조연","단역","directingFilms","public-filmography.js").doesNotContain("단역 이력","/api/","편집","notifications.js");
             assertThat(Files.readString(exports.resource(id,"public-filmography.js"))).contains("fetch('portfolio.json')").doesNotContain("/api/");
             assertThat(Files.size(exports.resource(id,"css/filmography-view.css"))).isPositive();
             assertThat(Files.readString(exports.resource(id,"css/actor-detail.css"))).doesNotContain("cdn.jsdelivr.net");

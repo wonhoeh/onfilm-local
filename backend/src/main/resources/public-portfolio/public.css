@@ -8,3 +8,59 @@ dialog button { padding:8px 20px; cursor:pointer; }
 .local-preview-exit { display:block; padding:10px; text-align:center; color:white; background:#303047; }
 #detailsText { white-space:pre-line; overflow-wrap:anywhere; line-height:1.8; }
 @media(max-width:600px) { .film-card { flex-basis:80%; max-width:80%; } }
+.details-thumbnail{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px}
+.details-play{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#e509141a;color:#f32632;border:1px solid #f3263260;margin:20px auto 0;transition:background .2s,transform .2s}
+.details-play:hover{background:#e5091433;transform:scale(1.05)}
+.details-play:focus-visible{outline:2px solid #fff;outline-offset:4px}
+#details{width:min(520px,calc(100vw - 32px));max-height:85vh;max-height:85dvh;overflow:auto;overscroll-behavior:contain}
+#detailsTitle{overflow-wrap:anywhere}
+#details{padding:0;background:var(--panel-2,#15161b)}
+#details .details-thumbnail{border-radius:0;aspect-ratio:16/9}
+#details .popup-title{margin:0 0 6px;white-space:normal}
+#details .popup-meta{white-space:normal;flex-wrap:wrap}
+#details .popup-participation{margin:0;font-size:13px;line-height:1.6}
+#details .details-play{width:44px;height:44px;margin:0}
+#details .popup-action-row{margin-top:10px}
+#details .popup-video-box{position:relative;height:auto;aspect-ratio:16/9;overflow:hidden}
+#details .popup-mute-btn{padding:0}
+#details .popup-mute-btn [hidden]{display:none!important}
+body:has(dialog[open]),body:has(.gallery-lightbox-overlay.show){overflow:hidden}
+@media(max-width:760px){
+  .container{width:calc(100% - 32px)}
+  .profile-header{display:grid;grid-template-columns:38% minmax(0,1fr);align-items:start;gap:14px;margin-top:24px}
+  .profile-photo{grid-column:1;grid-row:1/span 2;width:100%;max-width:220px;height:auto;aspect-ratio:11/15}
+  .profile-info{display:contents;overflow-wrap:anywhere}
+  .profile-core{grid-column:2;grid-row:1;min-width:0}
+  .profile-info>.profile-tag-section{grid-column:1/-1;margin-top:4px}
+  .profile-title-row{margin-top:0}
+  .profile-info h1{font-size:clamp(20px,5vw,28px)}
+  .profile-info>.bio{grid-column:1/-1;font-size:13px;line-height:1.7;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;margin:0}
+  .sns-row,.profile-tag-list{flex-wrap:wrap}
+  .profile-tag{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+  .contact-copy-button,.sns-pill,#moreFilmography,#detailsClose{min-width:44px;min-height:44px}
+  #moreFilmography{display:inline-flex;align-items:center;justify-content:flex-end;flex-shrink:0}
+  .film-section-heading{gap:12px;flex-wrap:wrap}
+  .film-section-heading h2,.gallery-section h2{font-size:20px}
+  .film-slider-wrapper{scroll-snap-type:x proximity;overscroll-behavior-x:contain}
+  .film-slider{gap:12px}
+  .film-slider .film-card{flex:0 0 84%;max-width:84%;scroll-snap-align:start}
+  .film-card:hover{transform:none}
+  .film-arrow{display:none!important}
+  .gallery-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .filmography-view .film-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .filmography-view .film-body{display:none}
+  .filmography-view .film-poster-frame{aspect-ratio:4/5;height:auto;min-height:0}
+  .filmography-view .film-poster{object-position:var(--mobile-thumbnail-position,50% 50%)!important}
+  .filmography-view .film-poster{transform:none}
+  .filmography-view .film-card{border:0}
+  .filmography-view .film-title{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .filmography-view .film-meta{font-size:10px}
+  .gallery-item-wrap{min-width:0}
+  .gallery-item:hover{filter:none;box-shadow:none}
+  .gallery-lightbox-image{max-width:calc(100vw - 20px);max-height:calc(100dvh - 130px)}
+  .gallery-lightbox-arrow{width:44px;height:44px;background:#0008;border-radius:50%;z-index:2}
+  .gallery-lightbox-arrow.left{left:8px}.gallery-lightbox-arrow.right{right:8px}
+  .local-lightbox-close{min-height:44px;top:max(16px,env(safe-area-inset-top))}
+  .contact-copy-status{top:max(16px,env(safe-area-inset-top));max-width:calc(100vw - 32px)}
+  footer{padding-bottom:max(24px,env(safe-area-inset-bottom))}
+}

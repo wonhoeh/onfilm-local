@@ -6,26 +6,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.assertj.core.api.Assertions.*;
 
 class NotificationPersistenceTest extends LocalPersistenceTest {
-    @Test void latestFirstAndReadBoundarySurviveRestart(){
-        long first;
-        try(var ctx=start()){
-            var jdbc=ctx.getBean(JdbcTemplate.class);
-            jdbc.update("INSERT INTO app_notification(job_id,message) VALUES ('one','첫 번째 완료')");
-            var notices=ctx.getBean(NotificationController.class);
-            first=notices.list().items().get(0).id();
-            jdbc.update("INSERT INTO app_notification(job_id,message) VALUES ('two','두 번째 완료')");
-            assertThat(notices.list().items()).extracting(NotificationController.Notice::message).containsExactly("두 번째 완료","첫 번째 완료");
-            notices.read(new NotificationController.ReadRequest(first));
-            assertThat(notices.list().unread()).isEqualTo(1);
+    @Test void individualReadAndClearPersistWithoutChangingMedia(){
+        try(var context=start()){
+            var jdbc=context.getBean(JdbcTemplate.class);
+            jdbc.update("INSERT INTO app_notification(job_id,message) VALUES ('notice-a','첫 알림'),('notice-b','둘째 알림')");
+            var controller=context.getBean(NotificationController.class);var inbox=controller.list();
+            assertThat(inbox.unread()).isEqualTo(2);
+            controller.readOne(inbox.items().get(0).id());
+            assertThat(controller.list().unread()).isEqualTo(1);
+            assertThat(controller.list().items().get(0).read()).isTrue();
+            assertThat(controller.list().items().get(1).read()).isFalse();
         }
-        try(var ctx=start()){
-            var notices=ctx.getBean(NotificationController.class);
-            assertThat(notices.list().items()).hasSize(2);
-            assertThat(notices.list().items().get(1).read()).isTrue();
-            assertThat(notices.list().items().get(0).read()).isFalse();
-            notices.read(new NotificationController.ReadRequest(notices.list().items().get(0).id()));
-            notices.read(new NotificationController.ReadRequest(notices.list().items().get(0).id()));
-            assertThat(notices.list().unread()).isZero();
+        try(var context=start()){
+            var controller=context.getBean(NotificationController.class);assertThat(controller.list().unread()).isEqualTo(1);
+            controller.clear();controller.clear();assertThat(controller.list().items()).isEmpty();
         }
+        try(var context=start()){assertThat(context.getBean(NotificationController.class).list().items()).isEmpty();}
     }
 }

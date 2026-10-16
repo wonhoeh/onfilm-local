@@ -6,11 +6,14 @@
 .genre-status:empty { display:none; }
 button:disabled { opacity:.5; cursor:not-allowed; }
 #filmStatus { font-size:13px; line-height:1.6; }
-.thumbnail-preview { width:100%; max-height:240px; object-fit:contain; }
+.thumbnail-preview { width:100%; aspect-ratio:16/9; object-fit:cover; }
+.thumbnail-previews{display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%;align-items:start}
+.thumbnail-preview-box{min-width:0;text-align:left}
+.mobile-thumbnail-preview{aspect-ratio:4/5;max-width:160px;display:block}
 :focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .form-footer > a, .form-footer > button { display:inline-flex; align-items:center; justify-content:center; text-align:center; box-sizing:border-box; }
 .upload-drop-icon { width:36px; height:36px; flex:none; color:var(--muted); fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
-.media-actions { display:flex; flex-wrap:nowrap; align-items:center; justify-content:center; gap:8px; max-width:100%; overflow-x:auto; }
+.media-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; max-width:100%; min-width:0; }
 .dropzone .media-actions button { flex:none; margin:0; white-space:nowrap; display:inline-flex; align-items:center; justify-content:center; }
 .role-option-list { display:flex; flex-direction:row; flex-wrap:nowrap; gap:12px; }
 .role-option-list .role-option { flex:none; white-space:nowrap; }

@@ -15,6 +15,7 @@
     "test:published-playback": "electron test/published-playback.cjs",
     "check:windows-runtime": "node scripts/check-windows-runtime.cjs",
     "prepare:windows-runtime": "node scripts/prepare-windows-runtime.cjs",
+    "release:win": "node scripts/build-windows-installer.cjs",
     "pack:win": "electron-builder --config electron-builder.cjs --win --x64 --dir --publish never",
     "dist:win": "electron-builder --config electron-builder.cjs --win nsis --x64 --publish never"
   },

@@ -11,7 +11,7 @@ const mime = name => ({'.html':'text/html; charset=utf-8','.js':'application/jav
   '.m3u8':'application/vnd.apple.mpegurl','.ts':'video/mp2t','.woff2':'font/woff2'}[path.extname(name)] || 'text/plain; charset=utf-8');
 const safeName = name => typeof name === 'string' && name.length < 240 &&
   name.split('/').every(part => /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part) && !part.includes('..'));
-const allowed = name => /^(index\.html|filmography\.html|video-player\.html|portfolio\.json|public-profile\.js|public-filmography\.js|public-film-card\.js|public\.css|video-player\.js|timeline-preview\.js|film-preview\.js)$/.test(name)
+const allowed = name => /^(index\.html|filmography\.html|video-player\.html|portfolio\.json|public-profile\.js|public-filmography\.js|public-film-card\.js|public\.css|video-player\.js|timeline-preview\.js|film-preview\.js|contact-email\.js)$/.test(name)
   || /^(css|images|icons|fonts|vendor)\//.test(name) && /\.(css|png|svg|jpg|jpeg|webp|woff2|js)$|\/LICENSE$|\/[^/]+-LICENSE\.txt$/.test(name)
   || /^media\/((?:portrait|photo-[0-9]+|film-[0-9]+)\.(?:png|jpg)|film-[0-9]+(?:-trailer)?\/(index\.m3u8|segment-[0-9]{5,10}\.ts))$/.test(name);
 
@@ -68,16 +68,42 @@ async function preparePublication(dataDir, id, config, signal) {
   if (references.some(ref=> !names.has(ref))) throw new PublishError('공개본에서 사용하는 사진·영상이 누락됐습니다.');
   entries.sort((a,b)=>a.path.localeCompare(b.path,'en'));
   const media = entries.filter(entry=>entry.media), assets = entries.filter(entry=>!entry.media);
-  // Content-addressed immutable release: retries and profile-only edits reuse the same R2 objects.
+  // Preparation fingerprint; the publisher binds a fresh per-attempt R2 prefix before upload.
   const mediaDigest = sha256(JSON.stringify(media.map(entry=>[entry.path,entry.hash])));
   const prefix = 'onfilm/v1/'+mediaDigest;
   const slug = config.publicSlug;
-  const redirects = `/${slug}/media/* ${config.mediaOrigin}/${prefix}/media/:splat 302\n/ /${slug}/ 302\n/${slug} /${slug}/ 302\n`;
-  const headers = '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Cache-Control: no-cache\n';
-  const files = assets.map(entry=>({name:`/${slug}/${entry.path}`,data:entry.data,contentType:entry.contentType}));
-  files.push({name:'/404.html',data:Buffer.from('<!doctype html><html lang="ko"><meta charset="utf-8"><title>페이지 없음</title><h1>페이지를 찾을 수 없습니다.</h1></html>'),contentType:mime('404.html')});
   const release = sha256(JSON.stringify([config.accountId,config.project,config.bucket,config.siteOrigin,config.mediaOrigin,slug,entries.map(entry=>[entry.path,entry.hash])]));
-  return {site,id,media,files,prefix,release,redirects,headers,bytes:media.reduce((sum,item)=>sum+item.bytes,0),url:`${config.siteOrigin}/${slug}/`};
+  const plan={site,id,media,assets,prefix,release,bytes:media.reduce((sum,item)=>sum+item.bytes,0),url:`${config.siteOrigin}/${slug}/`};
+  bindPublicationVersion(plan,config,prefix);
+  return plan;
 }
 
-module.exports = {preparePublication,readEntry,PublishError,sha256,mime};
+// HTML, JSON, scripts and media share an immutable namespace, including on re-publish.
+// Keep the portable/local export untouched; bind only the in-memory upload files.
+function bindPublicationVersion(plan,config,prefix){
+  const previous=plan.prefix;plan.prefix=prefix;
+  if(!plan.assets){plan.redirects=plan.redirects.replaceAll('/'+previous+'/', '/'+prefix+'/');return;}
+  const base=`/${config.publicSlug}/releases/${sha256(plan.release+'\n'+prefix)}/`;
+  plan.publicBase=base;
+  plan.redirects=`${base}media/* ${config.mediaOrigin}/${prefix}/media/:splat 302\n/ /${config.publicSlug}/ 302\n/${config.publicSlug} /${config.publicSlug}/ 302\n`;
+  const entryPaths=['/404.html',`/${config.publicSlug}/`,...plan.assets.filter(entry=>entry.path.endsWith('.html')).flatMap(entry=>[`/${config.publicSlug}/${entry.path}`,`/${config.publicSlug}/${entry.path.replace(/\.html$/,'')}`])];
+  plan.headers=`/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`+
+    entryPaths.map(name=>`${name}\n  Cache-Control: no-store\n`).join('')+
+    `${base}*\n  Cache-Control: public, max-age=31536000, immutable\n`;
+  plan.files=[];
+  for(const entry of plan.assets){
+    let data=entry.data;
+    if(entry.path.endsWith('.html')){
+      const html=data.toString('utf8');
+      if(/<base\b/i.test(html))throw new PublishError('공개본의 기준 주소를 확인할 수 없습니다. 새 공개본을 만들어 주세요.');
+      const tag=`<base href="${base}">`;
+      data=Buffer.from(/<head\b[^>]*>/i.test(html)?html.replace(/<head\b[^>]*>/i,match=>match+tag):html.replace(/<html\b[^>]*>/i,match=>match+'<head>'+tag+'</head>'));
+      plan.files.push({name:`/${config.publicSlug}/${entry.path}`,data,contentType:entry.contentType});
+    }
+    plan.files.push({name:base+entry.path,data,contentType:entry.contentType});
+  }
+  plan.files.push({name:'/404.html',data:Buffer.from('<!doctype html><html lang="ko"><meta charset="utf-8"><title>페이지 없음</title><h1>페이지를 찾을 수 없습니다. 새로고침해 주세요.</h1></html>'),contentType:mime('404.html')});
+  if(plan.files.length>20000)throw new PublishError('공개 화면 파일이 너무 많습니다. 새 공개본을 만들어 주세요.');
+}
+
+module.exports = {preparePublication,bindPublicationVersion,readEntry,PublishError,sha256,mime};

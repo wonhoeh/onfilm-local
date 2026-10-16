@@ -24,10 +24,15 @@ public class FilmographyDraftController {
         String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO filmography_media_draft(id) VALUES (?)",id);return get(id);
     }
     @GetMapping("/{id}") public Draft get(@PathVariable String id){
+        touch(id);
         var found=jdbc.query("SELECT * FROM filmography_media_draft WHERE id=?",(r,n)->new Draft(id,r.getBoolean("thumbnail_changed"),r.getBytes("image")!=null,r.getBoolean("video_changed"),videos.findReady(r.getString("video_id")),r.getBoolean("trailer_changed"),videos.findReady(r.getString("trailer_id"))),id);
         if(found.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND);return found.get(0);
     }
     private void require(String id){if(jdbc.queryForList("SELECT id FROM filmography_media_draft WHERE id=? FOR UPDATE",String.class,id).isEmpty())throw new ResponseStatusException(HttpStatus.CONFLICT,"임시 작업이 이미 저장됐거나 없습니다. 다시 읽기로 확인해 주세요.");}
+    @DeleteMapping("/{id}") @Transactional
+    public void discard(@PathVariable String id){jdbc.update("DELETE FROM filmography_media_draft WHERE id=?",id);}
+    @PatchMapping("/{id}")
+    public void touch(@PathVariable String id){jdbc.update("UPDATE filmography_media_draft SET last_seen_at=CURRENT_TIMESTAMP WHERE id=?",id);}
     @PostMapping("/{id}/thumbnail") @Transactional(rollbackFor=IOException.class)
     public Draft thumbnail(@PathVariable String id,@RequestParam MultipartFile file)throws IOException{
         byte[] image=ImageNormalizer.normalize(file);require(id);

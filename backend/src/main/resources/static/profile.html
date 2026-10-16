@@ -31,6 +31,7 @@
                  alt="프로필 사진" />
 
             <div class="profile-info">
+                <div class="profile-core">
                 <div class="profile-title-row">
                     <h1 id="profileName" data-value="">회원</h1>
                     <button type="button"
@@ -45,12 +46,13 @@
                     생년월일 · 출생지 미등록
                 </div>
 
+                </div>
                 <p class="bio" id="bioDisplay" data-value="">
                     소개글을 입력해 주세요.
                 </p>
 
-                <div class="sns-row" id="snsRow"></div>
-                <section id="contactSection" class="profile-tag-section" hidden><div class="profile-tag-title">CONTACT ME</div><p id="contactEmailDisplay"></p></section>
+                <section class="profile-tag-section"><div class="profile-tag-title">SNS</div><div class="sns-row" id="snsRow"></div></section>
+                <section id="contactSection" class="profile-tag-section" hidden><div class="profile-tag-title">CONTACT ME</div><div class="contact-email-row"><span id="contactEmailDisplay"></span><button id="copyContactEmail" class="contact-copy-button" type="button" title="이메일 복사" aria-label="이메일 복사" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3"/></svg></button></div><span id="contactCopyStatus" class="contact-copy-status" role="status" aria-live="polite"></span></section>
 
                 <section class="profile-tag-section">
                     <div class="profile-tag-title">PROFILE TAGS</div>
@@ -184,4 +186,5 @@
 <script src="/vendor/hls.js/hls.min.js" defer></script>
 <script src="/film-preview.js" defer></script>
 <script src="/profile.js" defer></script>
+<script src="/contact-email.js" defer></script>
 </body></html>

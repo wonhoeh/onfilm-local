@@ -57,6 +57,16 @@ test('validate settings, preserve blank keys, and require new credentials on acc
   }
 });
 
+test('optional management token is encrypted, preserved on blank and never returned to renderer',async t=>{
+  const {store,directory}=await fixture(t),token='management-token-'.repeat(3);
+  const actions=createConnectionActions({store,check:async()=>[]});
+  const result=await actions.run('save',{...config(),r2ManagementToken:token});
+  assert.equal(result.hasR2ManagementToken,true);assert.equal(result.r2ManagementToken,undefined);
+  assert(!(await fs.readFile(path.join(directory,'cloudflare.enc'))).includes(Buffer.from(token)));
+  await actions.run('save',{...config(),r2ManagementToken:''});assert.equal((await store.read()).r2ManagementToken,token);
+  assert.equal(normalize({...config(),accountId:'f'.repeat(32)},await store.read()).r2ManagementToken,undefined);
+});
+
 test('encrypted settings persist across store recreation and no IPC response returns credentials', async t => {
   const fixtureData = await fixture(t), {directory,encryption,store} = fixtureData;
   const actions = createConnectionActions({store,check:async () => []});

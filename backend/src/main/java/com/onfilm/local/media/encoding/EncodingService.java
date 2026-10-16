@@ -17,17 +17,20 @@ public class EncodingService {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
     private final FfmpegEncoder encoder;
+    private final TrailerEditingService editing;
     private final Path root;
     private final Object execution=new Object();
     private volatile boolean closing;
-    public EncodingService(JdbcTemplate jdbc,PlatformTransactionManager manager,FfmpegEncoder encoder,@Value("${onfilm.data-dir}") String directory){
-        this.jdbc=jdbc;this.tx=new TransactionTemplate(manager);this.encoder=encoder;root=Path.of(directory).toAbsolutePath().normalize();
+    public EncodingService(JdbcTemplate jdbc,PlatformTransactionManager manager,FfmpegEncoder encoder,TrailerEditingService editing,@Value("${onfilm.data-dir}") String directory){
+        this.jdbc=jdbc;this.tx=new TransactionTemplate(manager);this.encoder=encoder;this.editing=editing;root=Path.of(directory).toAbsolutePath().normalize();
         jdbc.update("UPDATE encode_job SET status='INTERRUPTED',message='앱 종료로 중단됐습니다. 재시도해 주세요.' WHERE status='RUNNING'");
     }
     public List<Job> list(){return jdbc.query("SELECT * FROM encode_job ORDER BY created_at,id",(r,n)->new Job(r.getString("id"),r.getString("video_id"),r.getString("status"),r.getInt("attempts"),r.getString("message"),r.getInt("progress")));}
     public synchronized Job request(String videoId){
         if(closing)throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
         return tx.execute(s->{
+            // Serialize requests with the cleanup claim; a DELETING video cannot acquire a new job.
+            if(jdbc.queryForList("SELECT id FROM local_video WHERE id=? FOR UPDATE",String.class,videoId).isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND);
             if(jdbc.queryForObject("SELECT COUNT(*) FROM local_video v WHERE id=? AND (film_id IS NOT NULL OR EXISTS (SELECT 1 FROM filmography_trailer t WHERE t.video_id=v.id) OR EXISTS (SELECT 1 FROM filmography_media_draft d WHERE d.video_id=v.id OR d.trailer_id=v.id)) AND status='READY'",Integer.class,videoId)!=1)throw new ResponseStatusException(HttpStatus.NOT_FOUND);
             var current=list().stream().filter(j->j.videoId().equals(videoId)).findFirst();
             if(current.isEmpty())jdbc.update("INSERT INTO encode_job(id,video_id,status) VALUES (?,?,'QUEUED')",UUID.randomUUID().toString(),videoId);
@@ -38,6 +41,7 @@ public class EncodingService {
     // Only one worker, no Kafka or in-memory-only queue. No transaction during ffmpeg.
     public void runNext(){synchronized(execution){
         if(closing)return;
+        if(editing.runNext())return;
         Job queued=list().stream().filter(j->j.status().equals("QUEUED")).findFirst().orElse(null);if(queued==null)return;
         if(jdbc.update("UPDATE encode_job SET status='RUNNING',attempts=attempts+1,message='',progress=0 WHERE id=? AND status='QUEUED'",queued.id())!=1)return;
         try{

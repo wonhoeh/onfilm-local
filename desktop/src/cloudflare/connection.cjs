@@ -4,7 +4,7 @@ const {randomUUID} = require('node:crypto');
 
 class SettingsError extends Error {}
 const fields = ['accountId', 'bucket', 'project', 'siteOrigin', 'mediaOrigin', 'publicSlug'];
-const secrets = ['accessKeyId', 'secretAccessKey', 'pagesToken'];
+const secrets = ['accessKeyId', 'secretAccessKey', 'pagesToken', 'r2ManagementToken'];
 const reservedSlugs = ['api', 'assets', 'media', 'css', 'js', 'images', 'fonts', 'vendor',
   'filmography', 'video-player', 'cloudflare', '_headers', '_redirects', '_worker', '_routes'];
 
@@ -44,21 +44,25 @@ function normalize(input, previous = {}, {allowMissingSlug = false} = {}) {
   // Do not silently reuse another account's keys when changing the account.
   const sameAccount = previous.accountId === config.accountId;
   if (sameAccount) {
+    if (!config.r2ManagementToken) config.r2ManagementToken = previous.r2ManagementToken || '';
     if (!config.pagesToken) config.pagesToken = previous.pagesToken;
     if (!config.accessKeyId) config.accessKeyId = previous.accessKeyId;
     if (!config.secretAccessKey && config.accessKeyId === previous.accessKeyId) config.secretAccessKey = previous.secretAccessKey;
   }
   for (const key of secrets) {
+    if (key === 'r2ManagementToken' && !config[key]) continue;
     if (typeof config[key] !== 'string' || !/^[A-Za-z0-9_\-+/=]{20,512}$/.test(config[key])) {
       throw new SettingsError('R2 Access Key ID·Secret Access Key와 Pages API 토큰을 모두 확인해 주세요. 계정을 바꾸면 키를 다시 입력해야 합니다.');
     }
   }
+  if(!config.r2ManagementToken)delete config.r2ManagementToken;
   return config;
 }
 
 function publicSettings(config) {
   return config ? {configured:true, ...Object.fromEntries(fields.map(key => [key, config[key]])),
-    publicUrl:config.publicSlug ? `${config.siteOrigin}/${config.publicSlug}` : null, hasCredentials:true} : {configured:false};
+    publicUrl:config.publicSlug ? `${config.siteOrigin}/${config.publicSlug}` : null, hasCredentials:true,
+    hasR2ManagementToken:Boolean(config.r2ManagementToken)} : {configured:false};
 }
 
 function createConnectionStore({directory, encryption}) {

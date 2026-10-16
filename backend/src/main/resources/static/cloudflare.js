@@ -2,7 +2,7 @@
   const $ = id => document.getElementById(id);
   const bridge = window.onfilmCloudflare;
   const fields = ['accountId','bucket','project','siteOrigin','mediaOrigin','publicSlug'];
-  const secrets = ['accessKeyId','secretAccessKey','pagesToken'];
+  const secrets = ['accessKeyId','secretAccessKey','pagesToken','r2ManagementToken'];
   let configured = false, busy = false, dirty = false, available = false;
   let reservedSlugs = [];
   function updatePublicAddress() {
@@ -35,6 +35,7 @@
     configured = result.configured;
     for (const key of fields) if (result[key] !== undefined) $(key).value = result[key];
     for (const key of secrets) $(key).placeholder = configured ? '저장된 값 유지 · 변경할 때만 입력' : '';
+    $('r2ManagementToken').placeholder=result.hasR2ManagementToken?'저장된 값 유지 · 변경할 때만 입력':'게시 종료용 관리 토큰';
     dirty = false; updatePublicAddress();
   }
   async function run(task) {
@@ -71,10 +72,10 @@
     for (const check of result.checks) {
       const card = document.createElement('div'), title = document.createElement('strong'), message = document.createElement('span');
       card.className = 'connection-result'; card.dataset.ok = String(check.ok);
-      title.textContent = (check.service === 'r2' ? 'R2' : 'Pages') + (check.ok ? ' · 확인 완료' : ' · 확인 필요');
+      title.textContent = ({r2:'R2',pages:'Pages',r2Management:'R2 공개 관리'}[check.service]||check.service) + (check.ok ? ' · 확인 완료' : ' · 확인 필요');
       message.textContent = check.message; card.append(title,message); $('connectionResults').append(card);
     }
-    $('connectionStatus').textContent = result.checks.every(check => check.ok) ? '두 서비스의 조회 연결을 확인했습니다. 공개본 화면에서 게시할 수 있습니다. 쓰기 권한은 실제 게시 시 확인됩니다.' : '확인하지 못한 항목을 수정한 뒤 다시 시도해 주세요.';
+    $('connectionStatus').textContent = result.checks.every(check => check.ok) ? '조회 연결을 확인했습니다. 쓰기·설정 변경 권한은 실제 게시 또는 게시 종료 시 확인됩니다.' : '확인하지 못한 항목을 수정한 뒤 다시 시도해 주세요.';
   });
   $('clearConnection').onclick = () => { $('clearConfirm').hidden = false; };
   $('cancelClear').onclick = () => { $('clearConfirm').hidden = true; };

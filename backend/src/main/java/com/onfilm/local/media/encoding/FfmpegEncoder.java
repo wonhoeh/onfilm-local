@@ -22,6 +22,9 @@ public class FfmpegEncoder {
         return run(command,timeout,line->{});
     }
     String run(List<String> command,Duration timeout,java.util.function.Consumer<String> progress) throws Exception {
+        return run(command,timeout,progress,()->false);
+    }
+    String run(List<String> command,Duration timeout,java.util.function.Consumer<String> progress,java.util.function.BooleanSupplier cancelled) throws Exception {
         Process process;
         synchronized(this){
             if(closing)throw new InterruptedException();
@@ -48,7 +51,11 @@ public class FfmpegEncoder {
             }catch(Exception e){output.completeExceptionally(e);}
         });
         try {
-            if(!process.waitFor(timeout.toMillis(),TimeUnit.MILLISECONDS))throw new Failure("변환 제한 시간을 초과했습니다. 영상 길이와 파일 상태를 확인해 주세요.");
+            long deadline=System.nanoTime()+timeout.toNanos();
+            while(!process.waitFor(200,TimeUnit.MILLISECONDS)){
+                if(cancelled.getAsBoolean()||closing)throw new InterruptedException();
+                if(System.nanoTime()>deadline)throw new Failure("변환 제한 시간을 초과했습니다. 영상 길이와 파일 상태를 확인해 주세요.");
+            }
             if(closing)throw new InterruptedException();
             String result=output.get(5,TimeUnit.SECONDS);
             if(process.exitValue()!=0)throw new Failure("영상 분석 또는 변환에 실패했습니다. 손상된 파일·지원하지 않는 코덱·저장 공간을 확인해 주세요.");
@@ -67,6 +74,9 @@ public class FfmpegEncoder {
         catch(NumberFormatException ignored){return -1;}
     }
     public void encode(Path source,Path output,java.util.function.IntConsumer progress) throws Exception {
+        encode(source,output,progress,()->false);
+    }
+    public void encode(Path source,Path output,java.util.function.IntConsumer progress,java.util.function.BooleanSupplier cancelled) throws Exception {
         if(!Files.isRegularFile(source,LinkOption.NOFOLLOW_LINKS))throw new Failure("원본 영상 파일을 찾을 수 없습니다.");
         String probe=run(List.of(ffprobe,"-v","error","-protocol_whitelist","file,pipe","-enable_drefs","0","-use_absolute_path","0","-select_streams","v:0","-show_entries","stream=width,height:format=duration","-of","json",source.toString()),Duration.ofSeconds(30));
         var info=json.readTree(probe);var streams=info.path("streams");
@@ -80,8 +90,29 @@ public class FfmpegEncoder {
             "-filter_threads","1","-vf","scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1",
             "-c:v","libx264","-threads","2","-preset","veryfast","-crf","23","-pix_fmt","yuv420p","-force_key_frames","expr:gte(t,n_forced*4)",
             "-c:a","aac","-b:a","128k","-ac","2","-f","hls","-hls_time","4","-hls_playlist_type","vod","-hls_flags","independent_segments",
-            "-hls_segment_filename",output.resolve("segment-%05d.ts").toString(),output.resolve("index.m3u8").toString()),Duration.ofHours(6),line->{int percent=progressPercent(line,seconds);if(percent>=0)progress.accept(percent);});
+            "-hls_segment_filename",output.resolve("segment-%05d.ts").toString(),output.resolve("index.m3u8").toString()),Duration.ofHours(6),line->{int percent=progressPercent(line,seconds);if(percent>=0)progress.accept(percent);},cancelled);
         validateOutput(output);
+    }
+    public record SourceInfo(double duration,boolean browserCompatible){}
+    public SourceInfo inspect(Path source,java.util.function.BooleanSupplier cancelled)throws Exception{
+        String probe=run(List.of(ffprobe,"-v","error","-protocol_whitelist","file,pipe","-enable_drefs","0","-use_absolute_path","0","-show_entries","stream=codec_type,codec_name,pix_fmt,width,height:format=duration","-of","json",source.toString()),Duration.ofSeconds(30),line->{},cancelled);
+        var info=json.readTree(probe);double seconds=info.path("format").path("duration").asDouble();
+        var video=java.util.stream.StreamSupport.stream(info.path("streams").spliterator(),false).filter(s->s.path("codec_type").asText().equals("video")).findFirst().orElseThrow(()->new Failure("영상 트랙이 없습니다."));
+        int w=video.path("width").asInt(),h=video.path("height").asInt();
+        if(!Double.isFinite(seconds)||seconds<=0||seconds>21600||w<2||h<2||(long)w*h>40_000_000)throw new Failure("영상 길이(6시간 이하)와 해상도(4천만 화소 이하)를 확인해 주세요.");
+        boolean compatible=video.path("codec_name").asText().equals("h264")&&video.path("pix_fmt").asText().equals("yuv420p");
+        for(var stream:info.path("streams"))if(stream.path("codec_type").asText().equals("audio")&&!stream.path("codec_name").asText().equals("aac"))compatible=false;
+        return new SourceInfo(seconds,compatible);
+    }
+    /** Re-encode for frame-accurate cuts; never stream-copy across an arbitrary keyframe. */
+    public void makeMp4(Path source,Path target,double start,double length,boolean preview,java.util.function.IntConsumer progress,java.util.function.BooleanSupplier cancelled)throws Exception{
+        if(!Double.isFinite(start)||!Double.isFinite(length)||start<0||length<=0)throw new Failure("선택 구간이 올바르지 않습니다.");
+        Files.createDirectories(target.getParent());
+        long estimate=(long)(length*(preview?250_000:1_500_000))+128L*1024*1024;
+        if(Files.getFileStore(target.getParent()).getUsableSpace()<estimate)throw new Failure("영상 편집을 위한 저장 공간이 부족합니다.");
+        var command=new ArrayList<>(List.of(ffmpeg,"-y","-hide_banner","-nostdin","-v","error","-progress","pipe:1","-nostats","-xerror","-protocol_whitelist","file,pipe","-enable_drefs","0","-use_absolute_path","0","-threads","2","-ss",Double.toString(start),"-i",source.toString(),"-t",Double.toString(length),"-map","0:v:0","-map","0:a:0?","-map_metadata","-1","-map_chapters","-1","-sn","-dn","-filter_threads","1","-vf",preview?"scale=w='min(640,iw)':h='min(360,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1":"scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1","-c:v","libx264","-threads","2","-preset","veryfast","-crf",preview?"28":"20","-pix_fmt","yuv420p","-c:a","aac","-ac","2","-b:a","128k","-movflags","+faststart","-f","mp4",target.toString()));
+        run(command,Duration.ofHours(6),line->{int p=progressPercent(line,length);if(p>=0)progress.accept(p);},cancelled);
+        if(!Files.isRegularFile(target)||Files.size(target)==0)throw new Failure("편집 결과 파일을 확인하지 못했습니다.");
     }
     void validateOutput(Path output) throws Exception {
         Path manifest=output.resolve("index.m3u8");

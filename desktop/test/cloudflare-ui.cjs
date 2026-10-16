@@ -55,11 +55,16 @@ async function run() {
   backend = new ApiProcess(config);
   let checks = 0;
   let publishCreates=0,publishMarker,publishConfirmations=0;
-  const publicationOptions={confirm:async()=>{publishConfirmations++;return true;},makeClient:()=>({
-    project:async()=>({branch:'production'}),
+  let current='published-test',live=['published-test'],enabled=true,failDelete=true;
+  const publicationOptions={confirm:async()=>{publishConfirmations++;return true;},confirmStop:async()=>true,makeClient:()=>({
+    project:async()=>({branch:'production',deploymentId:current}),
+    verifyCurrent:async id=>assert.equal(id,current),
+    listDeployments:async()=>live.map(id=>({id,latest_stage:{status:'success'}})),
+    publicAccess:{read:async()=>[{domain:'media.onfilm.co.kr',kind:'custom',enabled}],disableAll:async()=>{enabled=false;},enableConfigured:async()=>{enabled=true;}},
+    deleteDeployment:async id=>{if(failDelete)throw Error('simulated deletion failure');live=live.filter(x=>x!==id);},
     uploadMedia:async(_plan,progress)=>{progress({completed:1,total:2,bytes:1,totalBytes:2});await delay(1600);},
-    uploadPages:async plan=>{assert(plan.files.some(file=>file.name==='/won-ho_01/index.html'));await assetHash(plan.files[0]);return {};},
-    deploy:async(_plan,_manifest,_branch,marker)=>{publishCreates++;publishMarker=marker;throw new Error('simulated lost response');},
+    uploadPages:async plan=>{assert(plan.files.some(file=>['/won-ho_01/index.html','/404.html'].includes(file.name)));await assetHash(plan.files[0]);return {};},
+    deploy:async(_plan,_manifest,_branch,marker)=>{publishCreates++;publishMarker=marker;if(publishCreates===1)throw new Error('simulated lost response');current='deployment-'+publishCreates;live.push(current);return {id:current};},
     findDeployment:async marker=>{assert.equal(marker,publishMarker);return {id:'published-test'};},
     waitDeployment:async()=> 'success',
   })};
@@ -82,7 +87,7 @@ async function run() {
     assert.equal(await win.webContents.executeJavaScript("document.getElementById('publicSlug').checkValidity()"),false);
     assert.equal(await win.webContents.executeJavaScript("document.getElementById('publicSlugError').textContent.length>0"),true);
   }
-  const values = {accountId:'a'.repeat(32),bucket:'onfilm-media',project:'onfilm-test',siteOrigin:'https://onfilm.co.kr',mediaOrigin:'https://media.onfilm.co.kr',publicSlug:'won-ho_01',accessKeyId:'b'.repeat(32),secretAccessKey:'c'.repeat(64),pagesToken:'d'.repeat(40)};
+  const values = {accountId:'a'.repeat(32),bucket:'onfilm-media',project:'onfilm-test',siteOrigin:'https://onfilm.co.kr',mediaOrigin:'https://media.onfilm.co.kr',publicSlug:'won-ho_01',accessKeyId:'b'.repeat(32),secretAccessKey:'c'.repeat(64),pagesToken:'d'.repeat(40),r2ManagementToken:'e'.repeat(40)};
   await win.webContents.executeJavaScript(`for (const [id,value] of Object.entries(${JSON.stringify(values)})) {document.getElementById(id).value=value;document.getElementById(id).dispatchEvent(new Event('input',{bubbles:true}));} document.getElementById('saveConnection').click();`);
   await waitFor("document.getElementById('connectionStatus').textContent.includes('설정을 저장했습니다')");
   assert.equal(await win.webContents.executeJavaScript("document.getElementById('publicUrlPreview').textContent"),'https://onfilm.co.kr/won-ho_01');
@@ -127,6 +132,21 @@ async function run() {
   assert.equal(publishCreates,1);assert.equal(publishConfirmations,1);
   assert.equal(await win.webContents.executeJavaScript("document.getElementById('publishedUrl').textContent.includes('최근 게시: https://onfilm.co.kr/won-ho_01/')"),true);
   await capture('publication-complete.png');
+  await waitFor("!document.getElementById('stopPublication').disabled");
+  await win.webContents.executeJavaScript("document.getElementById('stopPublication').click()");
+  await waitFor("document.getElementById('stopPublication').textContent==='게시 종료 재시도' && !document.getElementById('stopPublication').disabled");
+  assert.equal(enabled,false);assert.equal(publishCreates,2);
+  assert.equal(await win.webContents.executeJavaScript("document.querySelector('[data-action=publish]').disabled"),true);
+  win.destroy();await open();await win.loadURL(config.origin+'/export.html');
+  await waitFor("document.getElementById('stopPublication').textContent==='게시 종료 재시도'");
+  failDelete=false;
+  await win.webContents.executeJavaScript("document.getElementById('stopPublication').click()");
+  await waitFor("document.getElementById('stopPublication').textContent==='게시 종료됨'");
+  assert.deepEqual(live,['deployment-2']);assert.equal(publishCreates,2);
+  await waitFor("!document.querySelector('[data-action=publish]').disabled");
+  await win.webContents.executeJavaScript("document.querySelector('[data-action=publish]').click()");
+  await waitFor("document.getElementById('publishStatus').textContent.includes('게시되었습니다')");
+  assert.equal(enabled,true);assert.equal(publishCreates,3);
   await win.loadURL(config.origin+'/cloudflare.html');
   await waitFor("document.getElementById('connectionStatus') && !document.getElementById('connectionFields').disabled");
   await win.webContents.executeJavaScript("document.querySelector('details').open=true;document.getElementById('clearConnection').click()");

@@ -8,6 +8,38 @@ import org.springframework.mock.web.MockMultipartFile;
 import static org.assertj.core.api.Assertions.*;
 
 class FilmographyThumbnailTest extends LocalPersistenceTest {
+    @Test void stagedPositionPersistsExportsAndMetadataOnlyEditsPreserveIt()throws Exception {
+        var output=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(100,200,1),"png",output);
+        var file=new MockMultipartFile("file","thumb.png","image/png",output.toByteArray());
+        String id;byte[] bytes;
+        try(var context=start()){
+            var films=context.getBean(FilmographyController.class);var drafts=context.getBean(FilmographyDraftController.class);
+            var draft=drafts.thumbnail(drafts.create().id(),file);
+            var item=new FilmographyController.Item(null,"작품",2026,null,"",List.of(),List.of(),"","",new com.onfilm.local.media.image.ImagePosition(20,90),"ACTING",new com.onfilm.local.media.image.ImagePosition(80,10));
+            var result=films.update(new FilmographyController.Update(0,List.of(item),List.of(new FilmographyController.MediaChange(0,draft.id()))));
+            id=result.items().get(0).id();assertThat(result.items().get(0).thumbnailPosition()).isEqualTo(item.thumbnailPosition());
+            bytes=context.getBean(FilmographyThumbnailController.class).get(id).getBody();
+            assertThatThrownBy(()->films.update(new FilmographyController.Update(0,List.of()))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+            films.update(new FilmographyController.Update(1,List.of(new FilmographyController.Item(id,"새 제목",2026,null,"",List.of(),List.of(),"",""))));
+            assertThat(films.get().items().get(0).thumbnailPosition()).isEqualTo(item.thumbnailPosition());
+            assertThat(films.get().items().get(0).mobileThumbnailPosition()).isEqualTo(item.mobileThumbnailPosition());
+            assertThat(context.getBean(FilmographyThumbnailController.class).get(id).getBody()).isEqualTo(bytes);
+            context.getBean(org.springframework.jdbc.core.JdbcTemplate.class).update("UPDATE profile SET name='배우' WHERE id=1");
+            var exports=context.getBean(com.onfilm.local.export.PortfolioExportService.class);var exported=exports.create();
+            var json=context.getBean(com.fasterxml.jackson.databind.ObjectMapper.class).readTree(exports.resource(exported.id(),"portfolio.json").toFile());
+            assertThat(json.at("/films/0/thumbnailPosition/y").asInt()).isEqualTo(90);
+            assertThat(json.at("/films/0/mobileThumbnailPosition/x").asInt()).isEqualTo(80);
+        }
+        try(var context=start()){
+            var films=context.getBean(FilmographyController.class);var thumbs=context.getBean(FilmographyThumbnailController.class);
+            assertThat(films.get().items().get(0).thumbnailPosition()).isEqualTo(new com.onfilm.local.media.image.ImagePosition(20,90));
+            assertThat(films.get().items().get(0).mobileThumbnailPosition()).isEqualTo(new com.onfilm.local.media.image.ImagePosition(80,10));
+            assertThat(thumbs.get(id).getBody()).isEqualTo(bytes);
+            thumbs.upload(id,file,2);assertThat(films.get().items().get(0).thumbnailPosition()).isEqualTo(com.onfilm.local.media.image.ImagePosition.center());
+            assertThat(films.get().items().get(0).mobileThumbnailPosition()).isEqualTo(com.onfilm.local.media.image.ImagePosition.center());
+            thumbs.delete(id,3);assertThat(films.get().thumbnailIds()).isEmpty();
+        }
+    }
     @Test void replaceRejectRestartAndCascadeDelete() throws Exception {
         String id;byte[] saved;
         var output=new java.io.ByteArrayOutputStream();

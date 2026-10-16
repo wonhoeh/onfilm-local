@@ -20,6 +20,7 @@ if (window.location.protocol === 'file:') {
 if (window.location.protocol === 'http:' && window.location.hostname === '127.0.0.1' && window.location.pathname === '/export.html') {
   contextBridge.exposeInMainWorld('onfilmExports', {
     publish: id => ipcRenderer.invoke('onfilm:publish','publish',id),
+    stopPublication: () => ipcRenderer.invoke('onfilm:publish','stop'),
     publicationStatus: () => ipcRenderer.invoke('onfilm:publish','status'),
     cancelPublication: () => ipcRenderer.invoke('onfilm:publish','cancel'),
     saveZip: id => ipcRenderer.invoke('onfilm:export-save',id),

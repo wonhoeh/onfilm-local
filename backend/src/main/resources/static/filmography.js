@@ -6,6 +6,14 @@
   let encodingJobs=[],encodingKnown=false,encodingPolling=false;
   const genreDrafts=new WeakMap();
   const mediaDrafts=new WeakMap();
+  const ownedDrafts=new Set();
+  function discardDraft(id){
+    if(!id)return;
+    void fetch('/api/filmography-drafts/'+id,{method:'DELETE',keepalive:true}).then(res=>{if(res.ok)ownedDrafts.delete(id);}).catch(()=>{});
+  }
+  function discardDrafts(){for(const id of ownedDrafts)discardDraft(id);}
+  setInterval(()=>{for(const id of ownedDrafts)void fetch('/api/filmography-drafts/'+id,{method:'PATCH'}).catch(()=>{});},60000);
+  window.addEventListener('pagehide',event=>{if(!event.persisted&&!busy)discardDrafts();});
   const uncertainMedia=new WeakSet();
   const labels={ACTOR:'배우',DIRECTOR:'감독',WRITER:'작가'};
   function node(tag,cls,text) {const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;}
@@ -25,7 +33,7 @@
       const card=node('article','film-card'),header=node('div','film-card-header'),title=node('div','film-card-title',item.title||'새 작품'),actions=node('div','film-card-actions');
       function action(label,fn,cls='ghost-btn') {const b=node('button',cls,label);b.type='button';b.addEventListener('click',fn);actions.append(b);}
       action('위로',()=>move(index,-1));action('아래로',()=>move(index,1));
-      action('삭제',()=>{if(confirm('이 작품을 삭제할까요?')){items.splice(index,1);dirty=true;render();}},'delete-film-btn');
+      action('삭제',()=>{if(confirm('이 작품을 삭제할까요?')){discardDraft(mediaDrafts.get(item)?.id);items.splice(index,1);dirty=true;render();}},'delete-film-btn');
       header.append(title,actions);card.append(header);
       const body=node('div','film-card-body'),fields=node('div','film-fields');
       function field(label,key,options={}) {
@@ -40,9 +48,11 @@
         });group.append(input);fields.append(group);return input;
       }
       field('제목','title',{maxLength:200});
+      item.category??='ACTING';
+      field('필모그래피 분류','category',{choices:{ACTING:'단편',DIRECTING:'연출',LEAD:'주연',SUPPORTING:'조연',MINOR:'단역'}}).required=true;
       const metaGrid=node('div','film-meta-grid');
       metaGrid.append(field('개봉연도','year',{type:'number',min:1888,max:2100}).parentElement,field('런타임(분)','runtime',{type:'number',min:1,max:1440}).parentElement,
-        field('관람연령','ageRating',{choices:{'':'선택',ALL:'전체 관람가',AGE_12:'12세 이상',AGE_15:'15세 이상',AGE_18:'청소년 관람불가'}}).parentElement);
+        field('관람연령','ageRating',{choices:{'':'없음',ALL:'전체 관람가',AGE_12:'12세 이상',AGE_15:'15세 이상',AGE_18:'청소년 관람불가'}}).parentElement);
       fields.append(metaGrid);
       const genreGroup=node('div','field-group'),genreLabel=node('label','field-label','장르');
       const genreWrap=node('div','chip-input-wrap'),genreInput=node('input','text-input genre-chip-input');
@@ -88,13 +98,18 @@
       roles.append(list);fields.append(roles);
       actorFields.push(field('캐스팅 구분','castType',{choices:{'':'선택',LEAD:'주연',SUPPORTING:'조연',CAMEO:'단역'}}),field('극중 배역이름','characterName',{maxLength:100}));actorState();
       const roleGrid=node('div','film-meta-grid role-fields');roleGrid.append(roles,...actorFields.map(el=>el.parentElement));fields.append(roleGrid);
-      const media=node('div','upload-block');media.append(node('div','field-label','섬네일 업로드'));
+      const media=node('div','upload-block');media.append(node('div','field-label','섬네일 · 웹 16:9 / 모바일 4:5'));
       const zone=node('div','dropzone thumb-dropzone');
       const draft=mediaDrafts.get(item),hasThumbnail=draft?.thumbnailChanged?draft.thumbnailPresent:thumbnailIds.has(item.id);
       if(!hasThumbnail)zone.append(dropIcon('섬네일'));
       if(hasThumbnail){
         const preview=node('img','thumbnail-preview');preview.src=draft?.thumbnailChanged?'/api/filmography-drafts/'+draft.id+'/thumbnail?v='+Date.now():'/api/filmography/'+encodeURIComponent(item.id)+'/thumbnail?v='+version;preview.alt=item.title+' 섬네일';zone.append(preview);
+        const position=item.thumbnailPosition||{x:50,y:50};preview.style.objectPosition=`${position.x}% ${position.y}%`;
         preview.addEventListener('error',()=>{$('filmStatus').textContent='섬네일을 읽지 못했습니다. 다시 읽기를 눌러 주세요.';});
+        const mobile=preview.cloneNode();mobile.className='thumbnail-preview mobile-thumbnail-preview';mobile.alt=item.title+' 모바일 섬네일';
+        const mp=item.mobileThumbnailPosition||{x:50,y:50};mobile.style.objectPosition=`${mp.x}% ${mp.y}%`;
+        const previews=node('div','thumbnail-previews');
+        for(const [label,image] of [['웹 · 16:9',preview],['모바일 · 4:5',mobile]]){const box=node('div','thumbnail-preview-box');box.append(node('span','field-label',label),image);previews.append(box);}zone.append(previews);
       }
       const file=node('input','thumb-file-input');file.type='file';file.accept='image/jpeg,image/png';file.hidden=true;
       const browse=node('button','thumb-browse-btn',hasThumbnail?'섬네일 교체':'파일 선택');browse.type='button';
@@ -103,6 +118,14 @@
       zone.addEventListener('dragover',event=>event.preventDefault());zone.addEventListener('drop',event=>{event.preventDefault();if(event.dataTransfer.files.length!==1){$('filmStatus').textContent='섬네일은 한 장씩 선택해 주세요.';return;}void changeThumbnail(item,event.dataTransfer.files[0]);});
       const thumbActions=node('div','media-actions');thumbActions.append(browse);zone.append(file,thumbActions);
       if(hasThumbnail){const remove=node('button','delete-film-btn','섬네일 삭제');remove.type='button';remove.addEventListener('click',()=>{if(confirm('섬네일을 삭제하도록 변경할까요? 마지막 저장 시 반영됩니다.'))void changeThumbnail(item,null);});thumbActions.append(remove);}
+      if(hasThumbnail)for(const [key,label,ratio,selector] of [['thumbnailPosition','웹용 위치 조정',16/9,'.thumbnail-preview:not(.mobile-thumbnail-preview)'],['mobileThumbnailPosition','모바일용 위치 조정',4/5,'.mobile-thumbnail-preview']]){
+        const adjust=node('button','thumb-position-btn',label);adjust.type='button';adjust.dataset.positionKind=key;
+        adjust.addEventListener('click',async()=>{
+          if(busy||!ready)return;
+          const position=await OnfilmImagePosition.open({src:zone.querySelector(selector).src,position:item[key],ratio});
+          if(position){item[key]=position;dirty=true;const image=zone.querySelector(selector);image.style.objectPosition=`${position.x}% ${position.y}%`;$('filmStatus').textContent='섬네일 위치를 조정했습니다. 저장을 눌러 반영해 주세요.';}
+        });thumbActions.append(adjust);
+      }
       media.append(zone);
       for(const kind of ['trailer','video']){
       const isTrailer=kind==='trailer',label=isTrailer?'트레일러':'영상';
@@ -116,6 +139,12 @@
       videoFile.addEventListener('change',()=>{if(videoFile.files[0])void changeVideo(item,videoFile.files[0],kind);});
       videoZone.addEventListener('dragover',event=>event.preventDefault());videoZone.addEventListener('drop',event=>{event.preventDefault();if(event.dataTransfer.files.length!==1){$('filmStatus').textContent='영상은 한 개씩 선택해 주세요.';return;}void changeVideo(item,event.dataTransfer.files[0],kind);});
       const videoActions=node('div','media-actions');videoActions.append(selectVideo);videoZone.append(videoFile);
+      if(isTrailer){
+        const source=draft?.videoChanged?draft.video:videos.find(v=>v.filmId===item.id);
+        const make=node('button','ghost-btn trailer-from-source','원본에서 만들기');make.type='button';make.dataset.unsaved=String(!source?.available);
+        make.title=source?.available?'원본에서 원하는 구간을 선택해 트레일러로 만듭니다.':'원본 영상을 먼저 선택해 주세요.';
+        make.addEventListener('click',()=>void makeTrailer(item,source));videoActions.append(make);
+      }
       if(video){const unlink=node('button','ghost-btn',label+' 연결 해제');unlink.type='button';unlink.addEventListener('click',()=>{if(confirm('마지막 저장 시 '+label+' 연결을 해제합니다. 복사본은 보관됩니다.'))void changeVideo(item,null,kind);});videoActions.append(unlink);}
       if(video?.available){
         const state=node('p','encoding-state');state.dataset.videoId=video.id;state.setAttribute('role','status');
@@ -123,7 +152,7 @@
         const encode=node('button','encoding-start ghost-btn','인코딩 시작');encode.type='button';encode.dataset.videoId=video.id;
         encode.addEventListener('click',()=>void requestEncoding(video.id));videoZone.append(state);videoActions.append(encode);
         const watch=node('button','encoding-watch ghost-btn',label+' 보기');watch.type='button';watch.dataset.videoId=video.id;watch.dataset.staged=String(!!(isTrailer?draft?.trailerChanged:draft?.videoChanged));watch.hidden=true;
-        watch.addEventListener('click',()=>{if(busy)return;if(dirty){$('filmStatus').textContent='작품 정보 변경을 먼저 저장한 뒤 영상을 열어 주세요.';return;}location.href='/video-player.html?videoId='+encodeURIComponent(video.id);});videoActions.append(watch);
+        watch.addEventListener('click',()=>{if(busy)return;if(dirty){$('filmStatus').textContent='작품 정보 변경을 먼저 저장한 뒤 영상을 열어 주세요.';return;}location.href='/video-player.html?videoId='+encodeURIComponent(video.id)+'&from=edit-filmography';});videoActions.append(watch);
       }
       videoZone.append(videoActions);
       media.append(videoZone);
@@ -157,7 +186,7 @@
   async function ensureDraft(item){
     if(mediaDrafts.has(item))return mediaDrafts.get(item);
     const res=await fetch('/api/filmography-drafts',{method:'POST'});if(!res.ok)throw new Error('임시 작업을 만들지 못했습니다.');
-    const draft=await res.json();mediaDrafts.set(item,draft);return draft;
+    const draft=await res.json();ownedDrafts.add(draft.id);mediaDrafts.set(item,draft);return draft;
   }
   async function recoverDraft(item,error){
     const draft=mediaDrafts.get(item);
@@ -165,9 +194,22 @@
     $('filmStatus').textContent=error.message+' 작품 정보는 유지됩니다. 파일 표시를 확인한 뒤 다시 선택해 주세요.';
     if(uncertainMedia.has(item))$('filmStatus').textContent+=' 임시 파일 상태를 확인하지 못해 저장을 잠시 막았습니다. 해당 파일을 다시 선택하거나 다시 읽기로 편집을 취소해 주세요.';
   }
+  async function makeTrailer(item,source){
+    if(busy||!ready||!source?.available)return;
+    busy=true;dirty=true;controls();
+    try{
+      const draft=await ensureDraft(item);
+      const result=await OnfilmTrailerEditor.open({draftId:draft.id,sourceId:source.id,filmId:item.id});
+      const response=await fetch('/api/filmography-drafts/'+draft.id);if(!response.ok)throw new Error('편집 상태를 확인하지 못했습니다.');
+      mediaDrafts.set(item,await response.json());uncertainMedia.delete(item);render();
+      $('filmStatus').textContent=result.accepted?'트레일러를 준비했습니다. 작품 저장을 눌러 반영해 주세요.':'트레일러 만들기를 취소했습니다. 기존 트레일러는 유지됩니다.';
+      await pollEncoding();
+    }catch(error){await recoverDraft(item,error);}
+    finally{busy=false;controls();}
+  }
   async function changeVideo(item,file,kind='video'){
     if(busy||!ready)return;
-    if(file&&(!/\.(mp4|mov)$/i.test(file.name)||file.size===0||file.size>2*1024*1024*1024)){$('filmStatus').textContent='MP4/MOV 파일을 선택해 주세요. 빈 파일은 저장할 수 없으며 최대 2GB입니다.';return;}
+    if(file&&(!/\.(mp4|mov)$/i.test(file.name)||file.size===0||file.size>5*1024*1024*1024)){$('filmStatus').textContent='MP4/MOV 파일을 선택해 주세요. 빈 파일은 저장할 수 없으며 최대 5GB입니다.';return;}
     busy=true;dirty=true;controls();$('filmStatus').textContent='영상 임시 복사 중입니다. 앱을 종료하지 마세요.';
     try{
       const draft=await ensureDraft(item),url='/api/filmography-drafts/'+draft.id+'/'+kind;
@@ -193,6 +235,8 @@
       else res=await fetch(url,{method:'DELETE'});
       if(!res.ok){const data=await res.json().catch(()=>({}));throw new Error(data.message||'섬네일을 저장하지 못했습니다.');}
       mediaDrafts.set(item,await res.json());
+      item.thumbnailPosition={x:50,y:50};
+      item.mobileThumbnailPosition={x:50,y:50};
       uncertainMedia.delete(item);render();$('filmStatus').textContent=file?'섬네일을 준비했습니다. 마지막 저장 시 반영됩니다.':'섬네일 삭제를 준비했습니다. 마지막 저장 시 반영됩니다.';
     }catch(error){await recoverDraft(item,error);}
     finally{busy=false;controls();}
@@ -202,7 +246,7 @@
     busy=true;ready=false;controls();$('filmStatus').textContent='필모그래피를 불러오는 중입니다.';
     try{
       const profile=await fetch('/api/profile');if(!profile.ok)throw new Error();if(!(await profile.json()).name?.trim()){location.replace('/index.html?edit=1');return;}
-      const res=await fetch('/api/filmography');if(!res.ok)throw new Error();const data=await res.json();version=data.version;items=data.items;thumbnailIds=new Set(data.thumbnailIds);videos=data.videos||[];trailers=data.trailers||[];dirty=false;ready=true;render();$('filmStatus').textContent='작품 정보·섬네일·영상을 준비한 뒤 저장해 주세요. 저장 전에도 영상 인코딩을 시작할 수 있습니다.';
+      const res=await fetch('/api/filmography');if(!res.ok)throw new Error();const data=await res.json();discardDrafts();version=data.version;items=data.items;thumbnailIds=new Set(data.thumbnailIds);videos=data.videos||[];trailers=data.trailers||[];dirty=false;ready=true;render();$('filmStatus').textContent='작품 정보·섬네일·영상을 준비한 뒤 저장해 주세요. 저장 전에도 영상 인코딩을 시작할 수 있습니다.';
     }catch{$('filmStatus').textContent='읽지 못했습니다. 다시 읽기를 눌러 주세요. 기존 저장 내용은 변경하지 않았습니다.';}
     finally{busy=false;controls();}
   }

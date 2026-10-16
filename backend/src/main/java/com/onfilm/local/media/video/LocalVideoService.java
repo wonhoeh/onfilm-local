@@ -15,7 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 /** Copies are immutable. Only generated IDs are used as filesystem paths. */
 @Service
 public class LocalVideoService {
-    static final long MAX_BYTES=2L*1024*1024*1024;
+    static final long MAX_BYTES=5L*1024*1024*1024;
     private final Path root;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
@@ -67,7 +67,7 @@ public class LocalVideoService {
         copy(null,0,draftId,true,name,length,input);
     }
     private void copy(String filmId,long version,String draftId,boolean trailer,String name,long length,InputStream input)throws IOException{
-        if(length<=0||length>MAX_BYTES)throw error(HttpStatus.PAYLOAD_TOO_LARGE,"빈 파일은 저장할 수 없으며 영상은 2GB 이하여야 합니다.");
+        if(length<=0||length>MAX_BYTES)throw error(HttpStatus.PAYLOAD_TOO_LARGE,"빈 파일은 저장할 수 없으며 영상은 5GB 이하여야 합니다.");
         if(name==null||name.isBlank()||name.length()>200||name.chars().anyMatch(c->c<32)||name.contains("/")||name.contains("\\"))throw error(HttpStatus.BAD_REQUEST,"파일 이름을 확인해 주세요.");
         String lower=name.toLowerCase(Locale.ROOT);
         if(!lower.endsWith(".mp4")&&!lower.endsWith(".mov"))throw error(HttpStatus.BAD_REQUEST,"현재 MP4·MOV 파일만 지원합니다.");

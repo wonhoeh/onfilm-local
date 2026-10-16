@@ -512,11 +512,19 @@
                     transform .2s cubic-bezier(.2,1.7,.6,1);
         }
         .popup-play-btn-circle{
-            background: rgba(255,255,255,0.9);
-            color: black;
+            width: 40px;
+            height: 40px;
+            background: #e50914;
+            color: white;
+        }
+        .popup-play-btn-circle svg{
+            display: block;
+            width: 20px;
+            height: 20px;
+            flex: none;
         }
         .popup-play-btn-circle:hover {
-            background: white;
+            background: #f6121d;
             transform: scale(1.08);
         }
 

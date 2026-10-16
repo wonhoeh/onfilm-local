@@ -7,7 +7,6 @@
   $('filmPrevBtn').onclick=()=>wrapper.scrollBy({left:-wrapper.clientWidth,behavior:'smooth'});
   $('filmNextBtn').onclick=()=>wrapper.scrollBy({left:wrapper.clientWidth,behavior:'smooth'});
   wrapper.addEventListener('scroll',arrows);window.addEventListener('resize',arrows);
-  $('detailsClose').onclick=()=>$('details').close();
   const lightbox=$('lightbox'),page=document.querySelector('.page-root');
   let photos=[],photoIndex=0,returnFocus=null;
   function showPhoto(index){
@@ -44,8 +43,10 @@
       document.title=p.name+' · OnFilm';$('profileName').textContent=p.name;$('bioDisplay').textContent=p.intro;
       const contact=p.contact||{};
       $('contactSection').hidden=!contact.email?.trim();
+      $('copyContactEmail').hidden=!contact.email?.trim();
       $('contactEmailDisplay').textContent=contact.email||'';
-      $('profileMeta').textContent=[p.birthDate,p.birthPlace].filter(Boolean).join(' · ');$('profilePhoto').src=p.portrait;
+      $('profileMeta').replaceChildren(...[[p.birthDate,p.birthPlace],[p.heightCm?Number(p.heightCm)+' cm':null,p.weightKg?Number(p.weightKg)+' kg':null]].filter(values=>values.some(Boolean)).map(values=>{const line=document.createElement('div');line.className='profile-meta-line';for(const text of values.filter(Boolean)){const span=document.createElement('span');span.textContent=text;line.append(span);}return line;}));$('profilePhoto').src=p.portrait;
+      const portraitPosition=p.portraitPosition||{x:50,y:50};$('profilePhoto').style.objectPosition=`${portraitPosition.x}% ${portraitPosition.y}%`;
       for(const entry of p.sns){
         const url=new URL(entry.url);if(!['http:','https:'].includes(url.protocol))continue;
         const a=node('a','sns-pill');a.href=url.href;a.target='_blank';a.rel='noopener noreferrer';a.setAttribute('aria-label',entry.type);
@@ -59,6 +60,7 @@
       for(const [index,url] of photos.entries()){
         const button=node('button','gallery-item-wrap');button.type='button';button.setAttribute('aria-label','사진 '+(index+1)+' 크게 보기');
         const image=node('img','gallery-item');image.src=url;image.alt='갤러리 사진 '+(index+1);image.loading='lazy';button.append(image);
+        const position=data.photoPositions?.[index]||{x:50,y:50};image.style.objectPosition=`${position.x}% ${position.y}%`;
         button.onclick=()=>openPhoto(index);$('galleryGrid').append(button);
       }
       $('photoEmpty').hidden=data.photos.length!==0;$('publicStatus').textContent='';requestAnimationFrame(arrows);

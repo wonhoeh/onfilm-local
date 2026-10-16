@@ -52,19 +52,24 @@ function createWindow({ origin, backend, token, dataDir, show = true, timeoutMs 
     trashDirectory:directory=>shell.trashItem(directory),
   });
   const publisher=createPublicationActions({dataDir,store:connectionStore,
+    confirmStop:async({url,project,bucket,count})=>{
+      const result=await dialog.showMessageBox(win,{type:'warning',title:'게시 종료',message:'온라인 공개를 종료할까요?',
+        detail:`${url}\nPages: ${project}\nR2: ${bucket}\n\n종료 안내 화면으로 교체하고 이 전용 버킷의 모든 공개 주소를 차단합니다. 과거 Pages 배포 ${count}개를 삭제하며 해당 배포 기록은 복구할 수 없습니다. 다른 사이트와 공유하는 프로젝트/버킷이면 취소하세요.\n로컬 DB·사진·영상·공개본과 R2 파일은 삭제하지 않습니다. R2 저장 용량은 유지됩니다. 다시 게시하면 설정된 미디어 주소만 다시 공개합니다. 이미 내려받은 파일·브라우저 캐시는 회수할 수 없습니다.`,
+        buttons:['취소','게시 종료'],defaultId:0,cancelId:0});return result.response===1;
+    },
     confirm:async({url,project,bytes})=>{
       const result=await dialog.showMessageBox(win,{type:'question',title:'온라인 게시',
         message:'선택한 공개본을 온라인에 게시할까요?',
-        detail:`${url}\nPages 프로젝트: ${project}\n사진·영상: ${(bytes/1024/1024).toFixed(2)} MB\n\n이 프로젝트의 기존 사이트 전체가 선택한 공개본으로 교체됩니다. 공개 주소 이름을 바꾸면 이전 경로는 사라집니다. 프로필·사진·작품·이메일이 공개되며 R2 이용량에 따라 비용이 발생할 수 있습니다. 이전 R2 파일은 자동 삭제하지 않습니다.`,
+        detail:`${url}\n프로젝트: ${project} · 사진·영상 ${(bytes/1024/1024).toFixed(2)} MB\n\n• 기존 사이트 전체를 이 공개본으로 교체합니다.\n• 프로필·사진·영상·입력한 이메일이 공개됩니다.\n• 앱이 관리하는 이전 게시 파일은 자동 삭제됩니다.\n• 주소 이름을 바꾸면 이전 주소는 사용할 수 없습니다.\n• R2 사용량에 따라 비용이 발생할 수 있습니다.`,
         buttons:['취소','게시'],defaultId:0,cancelId:0});return result.response===1;
     },...publicationOptions});
   ipcMain.handle('onfilm:publish',async(event,action,id)=>{
     if(!authorizedExportSender(event,contents,origin))return {status:'error',message:'공개본 관리 화면에서만 사용할 수 있습니다.'};
     if(action==='status')return publisher.status();
     if(action==='cancel')return publisher.cancel();
-    if(action!=='publish')return {status:'error',message:'지원하지 않는 작업입니다.'};
+    if(!['publish','stop'].includes(action))return {status:'error',message:'지원하지 않는 작업입니다.'};
     if(backups.busy||cloudflare.busy||exports.busy)return {status:'error',message:'다른 파일·연결 작업이 끝난 뒤 게시해 주세요.'};
-    return publisher.publish(id);
+    return action==='stop'?publisher.stop():publisher.publish(id);
   });
   for(const [channel,action] of [['onfilm:export-save','save'],['onfilm:export-open','open'],['onfilm:export-usage','usage'],['onfilm:export-trash','trash']]) {
     ipcMain.handle(channel,(event,id)=>authorizedExportSender(event,contents,origin)
@@ -77,7 +82,7 @@ function createWindow({ origin, backend, token, dataDir, show = true, timeoutMs 
     callback({requestHeaders:{...details.requestHeaders, 'X-Onfilm-Token':token}});
   });
   contents.on('will-prevent-unload', (event) => {
-    const choice = dialog.showMessageBoxSync(win, {type:'question', buttons:['계속 편집','변경 버리기'],
+    const choice = dialog.showMessageBoxSync(win, {type:'question', buttons:['취소','확인'],
       defaultId:0, cancelId:0, message:'저장하지 않은 변경을 버릴까요?'});
     if (choice === 1) event.preventDefault();
   });

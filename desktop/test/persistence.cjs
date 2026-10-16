@@ -61,7 +61,7 @@ async function verifyStaticPortfolio(site, published=false) {
       if(published){
         const pathname=new URL(req.url,'http://localhost').pathname;
         requests.push(req.url);
-        if(pathname.startsWith('/actor_01/media/')){res.writeHead(302,{Location:mediaOrigin+'/'+plan.prefix+'/'+pathname.slice('/actor_01/'.length)}).end();return;}
+        if(pathname.startsWith(plan.publicBase+'media/')){res.writeHead(302,{Location:mediaOrigin+'/'+plan.prefix+'/'+pathname.slice(plan.publicBase.length)}).end();return;}
         const name=pathname==='/actor_01/'?'/actor_01/index.html':pathname;
         const asset=plan.files.find(file=>file.name===name);if(!asset){res.writeHead(404).end();return;}
         res.setHeader('Content-Type',asset.contentType);
@@ -95,7 +95,7 @@ async function verifyStaticPortfolio(site, published=false) {
     fs.writeFileSync(path.join(directory,published?'published-portfolio.png':'public-portfolio.png'),(await viewer.webContents.capturePage()).toPNG());
     await viewer.webContents.executeJavaScript("document.querySelector('#filmSlider a').dispatchEvent(new MouseEvent('mouseenter'))");
     await waitFor(()=>viewer.webContents.executeJavaScript("document.querySelector('.movie-popup video')?.currentTime>.2"));
-    assert.equal(await viewer.webContents.executeJavaScript("document.querySelector('.movie-popup video').muted"),true);
+    assert.equal(await viewer.webContents.executeJavaScript("document.querySelector('.movie-popup video').muted"),false);
     await viewer.webContents.executeJavaScript("OnfilmPreview.close()");
     await viewer.webContents.executeJavaScript("document.querySelector('#filmSlider a').click()");
     await waitFor(()=>viewer.webContents.executeJavaScript("document.getElementById('video')?.currentTime > 0.2"));
@@ -270,6 +270,7 @@ app.whenReady().then(async()=>{
   await window.webContents.executeJavaScript(`
     document.getElementById('addFilmBtn').click();
     const title=document.querySelector('#filmList article:last-child [data-field=title]');title.value='두 번째 영화';title.dispatchEvent(new Event('input'));
+    const category=document.querySelector('#filmList article:last-child [data-field=category]');category.value='MINOR';category.dispatchEvent(new Event('input'));
     document.querySelector('#filmList article:last-child .film-card-actions button').click();
     window.originalFetch=window.fetch;
     window.fetch=async(...args)=>{const response=await window.originalFetch(...args);if(args[1]?.method==='PUT')throw new Error('lost response after commit');return response;};
@@ -290,7 +291,7 @@ app.whenReady().then(async()=>{
   assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('#experienceFilms .film-card').length"),1);
   fs.writeFileSync(path.join(directory,'filmography-view.png'),(await window.webContents.capturePage()).toPNG());
   await window.webContents.executeJavaScript("document.querySelector('#experienceFilms .film-card').focus()");
-  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.movie-popup')?.hidden === false"));
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.movie-popup')?.hidden === false && document.querySelector('.popup-title')?.textContent === '두 번째 영화'"));
   assert.equal(await window.webContents.executeJavaScript("document.querySelector('.popup-action-row').hidden"),true);
   assert.equal(await window.webContents.executeJavaScript("document.querySelector('.popup-title').textContent"),'두 번째 영화');
   fs.writeFileSync(path.join(directory,'experience-popup.png'),(await window.webContents.capturePage()).toPNG());
@@ -304,7 +305,7 @@ app.whenReady().then(async()=>{
   assert.equal(await window.webContents.executeJavaScript("document.getElementById('filmGroups').hidden"),true);
   await window.webContents.executeJavaScript("window.fetch=async(...args)=>args[0]==='/api/filmography'?new Response(JSON.stringify({items:[],videos:[],trailers:[],thumbnailIds:[],version:0})):window.savedFilmsFetch(...args);document.getElementById('retryFilms').click()");
   await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('filmGroups')?.hidden === false"));
-  assert.equal(await window.webContents.executeJavaScript("!document.getElementById('videoEmpty').hidden && !document.getElementById('experienceEmpty').hidden"),true);
+  assert.equal(await window.webContents.executeJavaScript("[...document.querySelectorAll('#filmGroups section')].every(section=>section.hidden)"),true);
   await window.webContents.executeJavaScript("window.fetch=window.savedFilmsFetch;document.getElementById('retryFilms').click()");
   await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('#experienceFilms .film-card').length === 1"));
   await window.webContents.executeJavaScript("document.getElementById('backToProfile').click()");
@@ -527,9 +528,12 @@ app.whenReady().then(async()=>{
   await window.webContents.executeJavaScript("document.querySelector('.notification-bell').click()");
   await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('.notification-item').length===2"));
   assert.equal(await window.webContents.executeJavaScript("document.querySelector('.notification-item p').textContent.startsWith('트레일러 인코딩 완료')"),true);
+  await window.webContents.executeJavaScript("document.querySelector('.notification-item').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('.notification-item.unread').length===1"));
   fs.writeFileSync(path.join(directory,'encoding-notifications.png'),(await window.webContents.capturePage()).toPNG());
   await window.webContents.executeJavaScript("document.querySelector('.notification-read').click()");
   await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.notification-badge').hidden"));
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('.notification-item').length===0"));
   await window.webContents.executeJavaScript("document.querySelector('.notification-bell').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
   assert.equal(await window.webContents.executeJavaScript("document.getElementById('notificationPanel').hidden"),true);
   assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('.trailer-dropzone .upload-drop-icon').length"),0);
@@ -543,17 +547,17 @@ app.whenReady().then(async()=>{
   assert.equal(await window.webContents.executeJavaScript("document.querySelector('.movie-popup').hidden"),false);
   await waitFor(()=>window.webContents.executeJavaScript("getComputedStyle(document.querySelector('.popup-thumb')).opacity==='0'"));
   fs.writeFileSync(path.join(directory,'trailer-popup-muted.png'),(await window.webContents.capturePage()).toPNG());
-  assert.equal(await window.webContents.executeJavaScript("document.querySelector('.movie-popup video').muted"),true);
-  const soundIcons = () => window.webContents.executeJavaScript("['.popup-sound-on','.popup-sound-off'].map(selector=>getComputedStyle(document.querySelector(selector)).display!=='none')");
-  assert.deepEqual(await soundIcons(),[false,true]);
-  await window.webContents.executeJavaScript("document.querySelector('.popup-sound-off path').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
   assert.equal(await window.webContents.executeJavaScript("document.querySelector('.movie-popup video').muted"),false);
+  const soundIcons = () => window.webContents.executeJavaScript("['.popup-sound-on','.popup-sound-off'].map(selector=>getComputedStyle(document.querySelector(selector)).display!=='none')");
   assert.deepEqual(await soundIcons(),[true,false]);
-  assert.equal(new URL(window.webContents.getURL()).pathname,'/profile.html');
-  fs.writeFileSync(path.join(directory,'trailer-popup.png'),(await window.webContents.capturePage()).toPNG());
   await window.webContents.executeJavaScript("document.querySelector('.popup-sound-on path').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
   assert.equal(await window.webContents.executeJavaScript("document.querySelector('.movie-popup video').muted"),true);
   assert.deepEqual(await soundIcons(),[false,true]);
+  assert.equal(new URL(window.webContents.getURL()).pathname,'/profile.html');
+  fs.writeFileSync(path.join(directory,'trailer-popup.png'),(await window.webContents.capturePage()).toPNG());
+  await window.webContents.executeJavaScript("document.querySelector('.popup-sound-off path').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('.movie-popup video').muted"),false);
+  assert.deepEqual(await soundIcons(),[true,false]);
   await window.webContents.executeJavaScript("document.querySelector('.movie-popup').dispatchEvent(new MouseEvent('mouseleave'))");
   await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.movie-popup').hidden && document.querySelector('.movie-popup video').paused && !document.querySelector('.movie-popup video').hasAttribute('src')"));
   await window.webContents.executeJavaScript("window.previewFetch=window.fetch;window.fetch=(...args)=>String(args[0]).endsWith('/playback')?Promise.resolve(new Response('',{status:404})):window.previewFetch(...args);document.querySelector('#filmSlider .film-card').dispatchEvent(new MouseEvent('mouseenter'))");
@@ -573,11 +577,19 @@ app.whenReady().then(async()=>{
   // Opening the player starts audible playback without a second click.
   await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').currentTime > 0.3 && !document.getElementById('video').paused"));
   assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').muted"),false);
+  await window.webContents.executeJavaScript("document.activeElement?.blur();document.querySelector('.player-container').dispatchEvent(new Event('pointermove'))");
+  await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('.player-container').classList.contains('ui-idle')"));
+  await window.webContents.executeJavaScript("document.querySelector('.player-container').dispatchEvent(new Event('pointermove'))");
+  assert.equal(await window.webContents.executeJavaScript("document.querySelector('.player-container').classList.contains('ui-idle')"),false);
+  console.log('PASS: playing controls auto-hide and pointer movement restores UI');
   await pressKey('Space');
   assert.equal(await window.webContents.executeJavaScript("document.getElementById('video').paused"),true);
   await pressKey('Space');
   await waitFor(()=>window.webContents.executeJavaScript("!document.getElementById('video').paused"));
   await pressKey('Space');
+  // Auto-hide verification intentionally plays for 3+ seconds; seek checks need a fixed starting point.
+  await window.webContents.executeJavaScript("document.getElementById('video').currentTime=0");
+  await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').currentTime<.1 && !document.getElementById('video').seeking"));
   await pressKey('Right');
   await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').currentTime >= 5 && !document.getElementById('video').seeking"));
   await pressKey('Left');
@@ -613,6 +625,8 @@ app.whenReady().then(async()=>{
   await waitFor(()=>window.webContents.executeJavaScript("document.getElementById('video').currentTime < 2 && !document.getElementById('video').seeking"));
   fs.writeFileSync(path.join(directory,'video-player.png'), (await window.webContents.capturePage()).toPNG());
   await window.webContents.executeJavaScript("document.getElementById('backBtn').click()");
+  await waitFor(()=>window.webContents.executeJavaScript("location.pathname === '/edit-filmography.html' && document.querySelector('#filmList .film-card') !== null"));
+  await window.webContents.executeJavaScript("document.querySelector('.back-link').click()");
   await waitFor(()=>window.webContents.executeJavaScript("document.querySelector('#filmSlider .film-card') !== null"));
   const cardBefore=await window.webContents.executeJavaScript("{const c=document.querySelector('#filmSlider .film-card'),r=c.getBoundingClientRect();({border:getComputedStyle(c).borderColor,x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)})}");
   window.webContents.sendInputEvent({type:'mouseMove',x:cardBefore.x,y:cardBefore.y});await delay(200);
@@ -665,7 +679,7 @@ app.whenReady().then(async()=>{
   await window.webContents.executeJavaScript("document.getElementById('confirmExport').click();document.getElementById('createExport').click()");
   await waitFor(()=>window.webContents.executeJavaScript("document.querySelectorAll('#exportsList a').length === 1"));
   await waitFor(()=>window.webContents.executeJavaScript("!document.getElementById('createExport').disabled"));
-  assert.equal(await window.webContents.executeJavaScript("document.querySelectorAll('.export-row .export-actions > *').length"),4);
+  assert.deepEqual(await window.webContents.executeJavaScript("[...document.querySelectorAll('.export-row .export-actions > *')].map(button=>button.textContent)"),['게시','미리보기','ZIP 저장','폴더 열기','휴지통 이동']);
   fs.writeFileSync(path.join(directory,'export-redesign.png'),(await window.webContents.capturePage()).toPNG());
   const toolsMinimumSize=window.getMinimumSize();window.setMinimumSize(400,600);
   window.setSize(430,900);await delay(200);

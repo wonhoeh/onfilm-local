@@ -1,13 +1,19 @@
 const byId = id => document.getElementById(id);
 const form = byId('editProfileForm'), fields = byId('fields'), status = byId('status');
-let version = null, dirty = false, busy = false, tags = [], hasPortrait=false;
+let version = null, dirty = false, busy = false, tags = [], hasPortrait=false,portraitPosition={x:50,y:50};
 function markDirty() { dirty=true; status.textContent='아직 저장하지 않은 변경이 있습니다.'; }
 function lock(value) {
   busy=value; fields.disabled=value || version===null; byId('reload').disabled=value;
   for(const id of ['chooseProfilePhoto','selectProfileBtn','profileFileInput'])byId(id).disabled=value||version===null;
   byId('deleteProfileBtn').disabled=value||version===null||!hasPortrait;
+  byId('positionProfileBtn').disabled=value||version===null||!hasPortrait;
 }
-function renderPortrait() { byId('profilePreview').src=hasPortrait?'/api/profile/portrait?v='+version:'/images/profile-placeholder.png'; }
+function renderPortrait() { byId('profilePreview').src=hasPortrait?'/api/profile/portrait?v='+version:'/images/profile-placeholder.png';byId('profilePreview').style.objectPosition=`${portraitPosition.x}% ${portraitPosition.y}%`;byId('positionProfileBtn').hidden=!hasPortrait; }
+byId('positionProfileBtn').onclick=async()=>{
+  if(busy||!hasPortrait||version===null)return;
+  const position=await OnfilmImagePosition.open({src:byId('profilePreview').src,position:portraitPosition,ratio:220/300});
+  if(position){portraitPosition=position;renderPortrait();markDirty();byId('photoStatus').textContent='사진 위치를 조정했습니다. 아래 저장을 눌러 주세요.';}
+};
 async function changePortrait(file,remove=false) {
   if(busy||version===null||byId('photoSection').hidden)return;
   if(!remove&&(!file||!['image/jpeg','image/png'].includes(file.type)||file.size>5*1024*1024)){
@@ -19,7 +25,7 @@ async function changePortrait(file,remove=false) {
     const body=new FormData();body.append('version',String(version));if(file)body.append('file',file);
     const response=await fetch('/api/profile/portrait'+(remove?'?version='+version:''),remove?{method:'DELETE'}:{method:'POST',body});
     if(!response.ok)throw new Error();
-    version++;hasPortrait=!remove;renderPortrait();
+    version++;hasPortrait=!remove;portraitPosition={x:50,y:50};renderPortrait();
     byId('photoStatus').textContent=remove?'사진을 삭제했습니다.':'사진을 저장했습니다.';
   }catch{
     version=null;byId('photoStatus').textContent='처리 결과를 확인하지 못했습니다. 파일 형식·크기를 확인하고 다시 읽어 주세요. 응답 유실 시 저장됐을 수 있습니다.';
@@ -59,12 +65,13 @@ function addTag() {
 function apply(data) {
   byId('contactEmail').value=data.contact?.email||'';
   byId('actorName').value=data.name; byId('bioInput').value=data.oneLineIntro; byId('birthPlace').value=data.birthPlace || '';
+  byId('heightCm').value=data.heightCm??'';byId('weightKg').value=data.weightKg??'';
   const parts=(data.birthDate || '').split('-'); ['birthYear','birthMonth','birthDay'].forEach((id,i)=>byId(id).value=parts[i] || '');
   byId('snsList').replaceChildren(); (data.snsList || []).forEach(addSns);
   tags=[...(data.rawTags || [])]; renderTags(); byId('tagInput').value=''; version=data.version; dirty=false;
   byId('backToProfile').hidden = !data.name?.trim();
   byId('photoSection').hidden=!data.name?.trim();byId('profileCard').classList.toggle('with-photo',!!data.name?.trim());
-  hasPortrait=data.hasPortrait;renderPortrait();byId('photoStatus').textContent='';
+  hasPortrait=data.hasPortrait;portraitPosition=data.portraitPosition||{x:50,y:50};renderPortrait();byId('photoStatus').textContent='';
   document.querySelector('.header-title').textContent=data.name?.trim()?'프로필 편집':'프로필 입력';
 }
 async function load() {
@@ -103,6 +110,9 @@ form.addEventListener('submit',async event=>{
     const payload={name:byId('actorName').value.trim(),oneLineIntro:byId('bioInput').value.trim(),birthPlace:byId('birthPlace').value.trim(),birthDate:birthDate(),version,rawTags:tags,
       snsList:[...byId('snsList').children].map(row=>({type:row.querySelector('select').value,url:row.querySelector('input').value.trim()})).filter(s=>s.url)};
     payload.contact={email:byId('contactEmail').value.trim()};
+    payload.portraitPosition=portraitPosition;
+    payload.heightCm=byId('heightCm').value===''?null:Number(byId('heightCm').value);
+    payload.weightKg=byId('weightKg').value===''?null:Number(byId('weightKg').value);
     if(!payload.name) throw new Error('이름을 입력해 주세요.');
     lock(true);
     const response=await fetch('/api/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});

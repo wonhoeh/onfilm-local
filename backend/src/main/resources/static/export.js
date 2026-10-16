@@ -1,10 +1,14 @@
 (() => {
-  const $=id=>document.getElementById(id);let busy=false,publishing=false,pendingExportId=null;
+  const $=id=>document.getElementById(id);let busy=false,publishing=false,pendingExportId=null,stopPending=false,stopped=false,canStop=false;
   const node=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;};
-  const controls=()=>{$('createExport').disabled=busy||publishing||!$('confirmExport').checked;$('reloadExports').disabled=busy||publishing;$('readStorage').disabled=busy||publishing||!window.onfilmExports;$('exportsList').querySelectorAll('button').forEach(button=>button.disabled=busy||publishing);$('checkPublication').disabled=busy||publishing;};
+  const controls=()=>{$('createExport').disabled=busy||publishing||!$('confirmExport').checked;$('reloadExports').disabled=busy||publishing;$('readStorage').disabled=busy||publishing||!window.onfilmExports;$('exportsList').querySelectorAll('button').forEach(button=>button.disabled=busy||publishing||(button.dataset.action==='publish'&&stopPending));$('checkPublication').disabled=busy||publishing;$('stopPublication').disabled=busy||publishing||!!pendingExportId||!canStop||stopped;};
   function showPublication(result){
     $('cancelPublication').hidden=!result.busy;
     pendingExportId=result.pendingExportId||null;$('checkPublication').hidden=!pendingExportId;
+    stopPending=Boolean(result.stopPending);stopped=Boolean(result.stopped);canStop=Boolean(result.canStop);
+    $('stopPublication').hidden=!window.onfilmExports?.stopPublication||!result.configured;
+    $('stopPublication').textContent=stopped?'게시 종료됨':stopPending?'게시 종료 재시도':'게시 종료';
+    $('stopPublication').title=canStop?'':'Cloudflare 연결에서 R2 관리 API Token을 저장해 주세요.';
     $('publishStatus').textContent=!result.configured&&!result.busy&&result.status==='idle'?'Cloudflare 연결에서 공개 주소와 키를 먼저 저장해 주세요.':result.message;
     const progress=result.progress;$('publishProgress').hidden=!result.busy||!progress;
     if(progress){$('publishProgress').value=progress.totalBytes?Math.round(progress.bytes/progress.totalBytes*100):100;$('publishStatus').textContent+=` ${progress.completed}/${progress.total}개 · ${$('publishProgress').value}%`;}
@@ -16,15 +20,16 @@
     try{const result=await window.onfilmExports.publicationStatus();showPublication(result);publishing=Boolean(result.busy);controls();if(publishing&&!publishCall) setTimeout(()=>void publicationStatus(),1000);}catch{$('publishStatus').textContent='게시 상태를 확인하지 못했습니다.';}
   }
   let publishCall=false;
-  async function publish(id){
+  async function publish(id,stop=false){
     if(busy||publishing)return;publishing=true;publishCall=true;controls();
-    $('publishStatus').textContent='게시할 공개본을 확인하고 있습니다.';
+    $('publishStatus').textContent=stop?'게시 종료 대상을 확인하고 있습니다.':'게시할 공개본을 확인하고 있습니다.';
     const timer=setInterval(()=>void publicationStatus(),1000);
-    try{showPublication(await window.onfilmExports.publish(id));}
+    try{showPublication(await (stop?window.onfilmExports.stopPublication():window.onfilmExports.publish(id)));}
     catch{$('publishStatus').textContent='게시 응답을 확인하지 못했습니다. 다시 들어와 배포 결과를 확인해 주세요.';}
     finally{clearInterval(timer);publishing=false;publishCall=false;controls();await publicationStatus();}
   }
   $('checkPublication').onclick=()=>{if(pendingExportId)void publish(pendingExportId);};
+  $('stopPublication').onclick=()=>void publish(null,true);
   $('cancelPublication').onclick=async()=>{try{const result=await window.onfilmExports.cancelPublication();$('publishStatus').textContent=result.message;}catch{$('publishStatus').textContent='중단 결과를 확인하지 못했습니다. 잠시 후 상태를 확인해 주세요.';}};
   async function fileAction(id,action){
     if(busy)return;busy=true;controls();$('exportStatus').textContent=action==='saveZip'?'ZIP을 준비하고 저장 중입니다. 앱을 종료하지 마세요.':action==='trash'?'공개본을 확인하고 정리 중입니다.':'결과 폴더를 여는 중입니다.';

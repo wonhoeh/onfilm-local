@@ -4,7 +4,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const os=require('node:os');
 const {randomUUID}=require('node:crypto');
-const {preparePublication,readEntry,sha256}=require('../src/cloudflare/publication-files.cjs');
+const {preparePublication,bindPublicationVersion,readEntry,sha256}=require('../src/cloudflare/publication-files.cjs');
 const {createPublicationClient,assetHash}=require('../src/cloudflare/publication-client.cjs');
 const {createPublicationActions,createReceiptStore}=require('../src/cloudflare/publication.cjs');
 
@@ -16,7 +16,7 @@ async function fixture(t) {
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'onfilm-publish-'));
   t.after(()=>fs.rm(root,{recursive:true,force:true}));
   const dataDir=path.join(root,'data'),id=randomUUID(),site=path.join(dataDir,'exports',id,'site');
-  const contents={'index.html':'<html>actor</html>','public-profile.js':'/* profile */',
+  const contents={'index.html':'<html>actor</html>','public-profile.js':'/* profile */','contact-email.js':'/* contact copy */',
     'video-player.html':'<html>player</html>','video-player.js':'/* player */',
     'portfolio.json':JSON.stringify({profile:{portrait:'media/portrait.png'},photos:[],films:[{id:'film-0',manifestUrl:'media/film-0/index.m3u8'}]}),
     'media/portrait.png':'image','media/film-0/index.m3u8':'#EXTM3U\n#EXTINF:1,\nsegment-00000.ts\n#EXT-X-ENDLIST\n','media/film-0/segment-00000.ts':'video',
@@ -34,15 +34,39 @@ test('publication keeps local export unchanged, routes slug media to R2, and omi
   const f=await fixture(t),before=await fs.readFile(path.join(f.site,'portfolio.json'));
   assert.equal(f.plan.url,'https://onfilm.example/actor_01/');
   assert(f.plan.files.some(file=>file.name==='/actor_01/index.html'));
+  assert(f.plan.files.some(file=>file.name===f.plan.publicBase+'contact-email.js'));
   assert(f.plan.files.some(file=>file.name==='/404.html'));
   assert(!f.plan.files.some(file=>file.name.includes('/media/')));
-  assert(f.plan.redirects.includes('/actor_01/media/* https://media.onfilm.example/onfilm/v1/'));
+  assert(f.plan.redirects.includes(f.plan.publicBase+'media/* https://media.onfilm.example/onfilm/v1/'));
+  assert(!f.plan.redirects.includes('/actor_01/media/*'));
   assert(f.plan.redirects.includes('/ /actor_01/ 302'));
   assert.equal(f.plan.media.find(entry=>entry.path.endsWith('.ts')).contentType,'video/mp2t');
   assert.deepEqual(await fs.readFile(path.join(f.site,'portfolio.json')),before);
   const changed=await preparePublication(f.dataDir,f.id,{...config,publicSlug:'different'},signal());
   assert.equal(changed.prefix,f.plan.prefix);assert.notEqual(changed.release,f.plan.release);
   assert(!JSON.stringify(f.plan).includes(config.pagesToken));
+});
+
+test('v1/v2 and repeat publications never reuse a public asset URL across R2 namespaces',async t=>{
+  const f=await fixture(t),base=f.plan.publicBase;
+  const html=f.plan.files.find(file=>file.name==='/actor_01/index.html').data.toString();
+  assert(html.includes(`<base href="${base}">`));
+  assert(f.plan.files.some(file=>file.name===base+'portfolio.json'));
+  assert(!f.plan.files.some(file=>file.name==='/actor_01/portfolio.json'));
+  const nextPrefix='onfilm/v2/'+config.project+'/'+randomUUID();
+  bindPublicationVersion(f.plan,config,nextPrefix);
+  assert.notEqual(f.plan.publicBase,base);
+  assert(!f.plan.files.some(file=>file.name.startsWith(base)));
+  assert(f.plan.redirects.includes(f.plan.publicBase+'media/* '+config.mediaOrigin+'/'+nextPrefix+'/media/:splat'));
+  assert(!f.plan.redirects.includes(base));
+  assert(f.plan.headers.includes('Cache-Control: no-store'));
+  const again=f.plan.publicBase;bindPublicationVersion(f.plan,config,nextPrefix);assert.equal(f.plan.publicBase,again);
+  const data=JSON.parse(await fs.readFile(path.join(f.site,'portfolio.json'),'utf8'));data.profile.name='v2';
+  await fs.writeFile(path.join(f.site,'portfolio.json'),JSON.stringify(data));
+  for(const file of f.files)file.bytes=(await fs.stat(path.join(f.site,file.path))).size;
+  await fs.writeFile(f.marker,JSON.stringify({id:f.id,files:f.files}));
+  const second=await preparePublication(f.dataDir,f.id,config,signal());
+  assert.notEqual(second.publicBase,base); // Metadata-only edits also get their own JSON address.
 });
 
 test('publication accepts optimized JPEG references with image/jpeg and retains PNG compatibility',async t=>{

@@ -1,0 +1,4 @@
+ALTER TABLE profile ADD portrait_x INT NOT NULL DEFAULT 50 CHECK (portrait_x BETWEEN 0 AND 100);
+ALTER TABLE profile ADD portrait_y INT NOT NULL DEFAULT 50 CHECK (portrait_y BETWEEN 0 AND 100);
+ALTER TABLE gallery_photo ADD display_x INT NOT NULL DEFAULT 50 CHECK (display_x BETWEEN 0 AND 100);
+ALTER TABLE gallery_photo ADD display_y INT NOT NULL DEFAULT 50 CHECK (display_y BETWEEN 0 AND 100);

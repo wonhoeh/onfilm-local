@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/css/notifications.css"><script src="/notifications.js" defer></script>
 </head>
 <body class="ui-body bg-fixed"><main class="tools-page">
-  <nav><a class="back-link" href="/profile.html">← 프로필로 돌아가기</a><span class="brand">ONFILM / LOCAL</span></nav>
+  <nav><a class="back-link" href="/profile.html">← 프로필로 돌아가기</a></nav>
   <header class="tools-heading"><span class="eyebrow">PORTFOLIO EXPORT</span><h1>보여줄 준비, 한 번에.</h1><p>완성된 프로필을 공개용 파일로 만들고 미리 확인하세요.</p></header>
   <section class="tool-panel compact" aria-labelledby="cloudTitle">
     <div class="panel-heading"><div><h2 id="cloudTitle">온라인 게시</h2><p class="quiet">미리보기를 확인한 공개본의 게시 버튼을 눌러 주세요.</p></div><a class="btn" href="/cloudflare.html">Cloudflare 연결</a></div>
@@ -16,8 +16,9 @@
     <progress id="publishProgress" max="100" value="0" hidden aria-label="미디어 업로드 진행률"></progress>
     <p id="publishedUrl" class="file-path"></p>
     <button id="checkPublication" class="btn" type="button" hidden>이전 배포 결과 확인</button>
+    <button id="stopPublication" class="btn" type="button" hidden>게시 종료</button>
     <button id="cancelPublication" class="btn" type="button" hidden>업로드·결과 대기 중단</button>
-    <details class="tool-details"><summary>게시와 저장 공간 안내</summary><div class="details-body"><p>선택한 공개본으로 연결된 Pages 프로젝트 전체를 교체합니다. 사진·재생용 영상은 R2에 저장되며, 원본 영상과 DB는 업로드하지 않습니다.</p><p>수정 후에는 새 공개본을 만들어 게시하세요. 이전·실패한 업로드 파일은 안전을 위해 R2에서 자동 삭제하지 않으므로 저장 용량이 늘 수 있습니다. 게시 종료·원격 파일 정리는 아직 지원하지 않습니다.</p></div></details>
+    <details class="tool-details"><summary>게시와 저장 공간 안내</summary><div class="details-body"><p>선택한 공개본으로 연결된 Pages 프로젝트 전체를 교체합니다. 사진·재생용 영상은 R2에 저장되며, 원본 영상과 DB는 업로드하지 않습니다.</p><p>수정 후에는 새 공개본을 만들어 게시하세요. 게시 성공 후 앱이 기록한 이전 R2 전용 경로는 정리합니다. 게시 종료는 종료 화면 배포·과거 Pages 배포 삭제·전용 R2 버킷 공개 차단을 수행합니다. 로컬 데이터와 R2 파일은 유지되며 저장 용량도 남습니다. 종료에는 Cloudflare 연결의 R2 관리 API Token이 필요합니다.</p></div></details>
   </section>
   <section class="tool-panel featured" aria-labelledby="createTitle">
     <div class="panel-heading"><h2 id="createTitle">공개본 만들기</h2><span class="badge">읽기 전용</span></div>

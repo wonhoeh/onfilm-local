@@ -13,6 +13,23 @@ import org.springframework.web.server.ResponseStatusException;
 import static org.assertj.core.api.Assertions.*;
 
 class LocalVideoTest extends LocalPersistenceTest {
+    @Test void fiveGiBLimitIsSharedByOriginalAndTrailerWithoutAllocatingLargeFiles() throws Exception {
+        assertThat(LocalVideoService.MAX_BYTES).isEqualTo(5L*1024*1024*1024);
+        try(var ctx=start()){
+            var videos=ctx.getBean(LocalVideoService.class);
+            for(boolean trailer:List.of(false,true)){
+                // Invalid name stops after size validation, before any disk allocation.
+                assertThatThrownBy(()->{
+                    if(trailer)videos.uploadTrailerDraft("draft","../test.mp4",LocalVideoService.MAX_BYTES,InputStream.nullInputStream());
+                    else videos.uploadDraft("draft","../test.mp4",LocalVideoService.MAX_BYTES,InputStream.nullInputStream());
+                }).isInstanceOfSatisfying(ResponseStatusException.class,e->assertThat(e.getStatusCode().value()).isEqualTo(400));
+                assertThatThrownBy(()->{
+                    if(trailer)videos.uploadTrailerDraft("draft","test.mp4",LocalVideoService.MAX_BYTES+1,InputStream.nullInputStream());
+                    else videos.uploadDraft("draft","test.mp4",LocalVideoService.MAX_BYTES+1,InputStream.nullInputStream());
+                }).isInstanceOfSatisfying(ResponseStatusException.class,e->assertThat(e.getStatusCode().value()).isEqualTo(413));
+            }
+        }
+    }
     // Container header fixture only, intentionally not a decodable video.
     private byte[] fixture(){byte[] bytes=new byte[1024];bytes[3]=24;bytes[4]='f';bytes[5]='t';bytes[6]='y';bytes[7]='p';return bytes;}
     private String create(FilmographyController films){return films.update(new FilmographyController.Update(0,List.of(new FilmographyController.Item(null,"작품",null,null,"",List.of(),List.of(),"","")))).items().get(0).id();}

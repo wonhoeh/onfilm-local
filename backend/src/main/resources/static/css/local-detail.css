@@ -1,4 +1,15 @@
 /* Keep original actor-detail layout; only local/offline and accessibility overrides. */
+.contact-email-row { display:flex; align-items:center; gap:8px; margin-top:12px; }
+#contactEmailDisplay { overflow-wrap:anywhere; min-width:0; }
+.contact-copy-button { order:-1; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:32px; height:32px; padding:0; border:0; border-radius:7px; background:transparent; color:var(--muted,#aaa); cursor:pointer; }
+.contact-copy-button:hover { background:#ffffff12; color:#fff; }
+.contact-copy-button:focus-visible { outline:2px solid currentColor; outline-offset:2px; }
+.contact-copy-button:disabled { opacity:.5; cursor:wait; }
+.contact-copy-status { position:fixed; left:50%; top:16px; z-index:2100; max-width:calc(100vw - 40px); width:max-content; box-sizing:border-box; border:1px solid #a38af650; border-radius:12px; background:#232030; color:#eee8ff; padding:14px 22px; box-shadow:0 10px 35px #0006; font:13px/1.6 system-ui,sans-serif; overflow-wrap:anywhere; transform:translate(-50%,-140%); opacity:0; transition:transform .25s ease,opacity .25s ease; pointer-events:none; }
+.contact-copy-status:empty { visibility:hidden; }
+.contact-copy-status.show { transform:translate(-50%,0); opacity:1; }
+@media(prefers-reduced-motion:reduce) { .contact-copy-status { transition:none; } }
+.contact-copy-helper { position:fixed; top:0; left:0; width:1px; height:1px; opacity:0; }
 [hidden], .hidden { display: none !important; }
 .local-status { color: var(--muted); font-size: 13px; }
 .local-status:empty { display:none; }
@@ -19,7 +30,7 @@
 #localNotice { color:var(--text); max-width:440px; }
 #localNotice::backdrop { background:rgba(0,0,0,.8); }
 #localNotice h2 { font-size:18px; }
-#noticeText { line-height:1.6; }
+#noticeText { line-height:1.6; white-space:pre-line; }
 #noticeUrl { width:100%; padding:10px; margin-bottom:16px; color:var(--text); background:var(--panel); border:1px solid var(--line); }
 .local-lightbox-close { position:absolute; top:20px; right:20px; }
 .sns-pill[data-brand="instagram"] .sns-icon { --sns-mask:url("/icons/instagram.svg"); }
@@ -44,7 +55,31 @@
 .film-section-heading a{color:var(--muted,#aaa);text-decoration:none;font-size:14px;white-space:nowrap}
 .film-section-heading a:hover{color:var(--text,#fff)}
 .popup-participation{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
-.experience-preview .popup-video-box{height:52%}
-.experience-preview .popup-info{height:48%;box-sizing:border-box;overflow:auto}
+.movie-popup .popup-video-box{height:auto;aspect-ratio:16/9}
+.movie-popup .popup-info{height:auto;box-sizing:border-box}
+.popup-participation:not([hidden]){margin:0 0 8px}
+.experience-preview .popup-participation{margin-bottom:0}
 .popup-meta { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 @media (prefers-reduced-motion:reduce) { .movie-popup { transition:none; } }
+#profileMeta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.profile-meta-line{display:flex;gap:10px;align-items:baseline}
+@media(min-width:761px){.profile-meta-line+.profile-meta-line::before{content:'·'}}
+#profileMeta span{white-space:nowrap}
+#profileMeta span+span::before{content:'·';margin-right:10px}
+#bioDisplay{white-space:pre-line}
+@media(max-width:760px){
+  .profile-header{display:grid;grid-template-columns:38% minmax(0,1fr);align-items:start;gap:14px}
+  .profile-photo{grid-column:1;grid-row:1/span 2;width:100%;height:auto;aspect-ratio:11/15}
+  .profile-info{display:contents}
+  .profile-core{grid-column:2;grid-row:1;min-width:0}
+  .profile-info>.bio,.profile-info>.profile-tag-section{grid-column:1/-1}
+  .profile-info>.profile-tag-section:has(#snsRow){grid-column:2;grid-row:2;margin:0;min-width:0}
+  #snsRow{flex-wrap:wrap}
+  .profile-core .profile-title-row{margin-bottom:14px}
+  .profile-core h1{margin-bottom:0}
+  #profileMeta{flex-direction:column;gap:12px;font-size:13px;line-height:1.6}
+  .profile-meta-line{gap:8px;flex-wrap:wrap}
+  #profileMeta span{white-space:normal;overflow-wrap:anywhere}
+  #profileMeta span+span::before{content:'·';margin-right:8px}
+  #bioDisplay{white-space:normal;word-break:keep-all;overflow-wrap:anywhere;margin:0}
+}

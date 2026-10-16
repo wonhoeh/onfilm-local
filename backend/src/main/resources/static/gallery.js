@@ -2,12 +2,21 @@
   const $=id=>document.getElementById(id);
   const input=$('gallery-files'),status=$('gallery-status'),list=$('gallery'),browse=$('browseBtn'),area=$('uploadArea'),save=$('gallery-save'),retry=$('gallery-retry');
   let version=0,photos=[],ready=false,busy=false,dirty=false;
+  const ownedDrafts=new Set();
+  function discardDraft(id){
+    if(!id)return;
+    void fetch('/api/gallery/drafts/'+id,{method:'DELETE',keepalive:true}).then(res=>{if(res.ok)ownedDrafts.delete(id);}).catch(()=>{});
+  }
+  function discardDrafts(){for(const id of ownedDrafts)discardDraft(id);}
+  setInterval(()=>{for(const id of ownedDrafts)void fetch('/api/gallery/drafts/'+id,{method:'PATCH'}).catch(()=>{});},60000);
+  window.addEventListener('pagehide',event=>{if(!event.persisted&&!busy)discardDrafts();});
   let draggedPhoto=null;
   const dragType='application/x-onfilm-gallery-photo';
   function clearDropMarks(){list.querySelectorAll('.drop-before,.drop-after').forEach(card=>card.classList.remove('drop-before','drop-after'));}
   function endDrag(){draggedPhoto=null;clearDropMarks();list.querySelectorAll('.dragging').forEach(card=>card.classList.remove('dragging'));}
   function canReorder(event){return !busy&&ready&&photos.includes(draggedPhoto)&&event.dataTransfer?.types.includes(dragType)&&!event.dataTransfer.types.includes('Files');}
   const paths={front:'M15 5l-7 7 7 7',back:'M9 5l7 7-7 7',rotate:'M20 7V2l-3 3a8 8 0 1 0 3 9 M20 7h-5',delete:'M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14 M10 10v7 M14 10v7'};
+  paths.position='M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5 M8 12h8 M12 8v8';
   function icon(action){
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');
     const path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('d',paths[action]);svg.append(path);return svg;
@@ -21,7 +30,10 @@
   function fit(image,photo){
     const w=image.naturalWidth,h=image.naturalHeight;if(!w||!h)return;
     const frame=image.parentElement,odd=photo.turns%2;
-    const scale=Math.min(frame.clientWidth/(odd?h:w),frame.clientHeight/(odd?w:h));
+    const scale=Math.max(frame.clientWidth/(odd?h:w),frame.clientHeight/(odd?w:h));
+    const width=(odd?h:w)*scale,height=(odd?w:h)*scale,p=photo.position||{x:50,y:50};
+    image.style.left=((frame.clientWidth-width)*p.x/100+width/2)+'px';
+    image.style.top=((frame.clientHeight-height)*p.y/100+height/2)+'px';
     image.style.width=w*scale+'px';image.style.height=h*scale+'px';image.style.transform=`translate(-50%,-50%) rotate(${photo.turns*90}deg)`;
   }
   function render(){
@@ -54,14 +66,18 @@
       image.src=photo.draftId?`/api/gallery/drafts/${photo.draftId}/image`:`/api/gallery/${photo.id}/image?v=${version}`;
       image.addEventListener('load',()=>fit(image,photo));image.addEventListener('error',()=>{status.textContent='사진을 읽지 못했습니다. 다시 시도해 주세요.';retry.hidden=false;});frame.append(image);
       const actions=document.createElement('div');actions.className='photo-actions';
-      for(const [action,label] of [['front','앞으로'],['back','뒤로'],['rotate','시계 방향으로 90도 회전'],['delete','삭제']]){
+      for(const [action,label] of [['front','앞으로'],['back','뒤로'],['rotate','시계 방향으로 90도 회전'],['position','사진 위치 조정'],['delete','삭제']]){
         const button=document.createElement('button');button.type='button';button.className='photo-action';button.dataset.action=action;
         button.title=label;button.setAttribute('aria-label',`${index+1}번 사진 ${label}`);button.append(icon(action));
         button.dataset.edge=String(action==='front'&&index===0||action==='back'&&index===photos.length-1);
-        button.addEventListener('click',()=>{
+        button.addEventListener('click',async()=>{
           if(busy||!ready)return;
-          if(action==='delete'){if(!confirm('갤러리에서 삭제할까요?'))return;photos.splice(index,1);}
-          else if(action==='rotate')photo.turns=(photo.turns+1)%4;
+          if(action==='position'){
+            const position=await OnfilmImagePosition.open({src:image.src,position:photo.position,turns:photo.turns,ratio:4/5});
+            if(position){photo.position=position;dirty=true;status.textContent='사진 위치를 조정했습니다. 저장을 눌러 반영해 주세요.';fit(image,photo);}return;
+          }
+          if(action==='delete'){if(!confirm('갤러리에서 삭제할까요?'))return;discardDraft(photo.draftId);photos.splice(index,1);}
+          else if(action==='rotate'){const p=photo.position||{x:50,y:50};photo.position={x:100-p.y,y:p.x};photo.turns=(photo.turns+1)%4;}
           else{const next=index+(action==='front'?-1:1);if(next<0||next>=photos.length)return;[photos[index],photos[next]]=[photos[next],photos[index]];}
           dirty=true;status.textContent='';render();
         });actions.append(button);
@@ -79,7 +95,7 @@
     busy=true;controls();
     try{
       const profile=await request('/api/profile');if(!profile.name?.trim()){busy=false;location.replace('/index.html?edit=1');return;}
-      const data=await request('/api/gallery');version=data.version;photos=data.ids.map(id=>({id,turns:0}));ready=true;dirty=false;retry.hidden=true;status.textContent='';render();
+      const data=await request('/api/gallery');discardDrafts();version=data.version;photos=data.ids.map(id=>({id,turns:0,position:data.positions?.[id]||{x:50,y:50}}));ready=true;dirty=false;retry.hidden=true;status.textContent='';render();
     }catch{ready=false;status.textContent='불러오기에 실패했습니다. 다시 시도해 주세요.';retry.hidden=false;}
     finally{busy=false;controls();}
   }
@@ -92,7 +108,7 @@
         if(file.size>5*1024*1024)throw new Error('파일 용량은 5MB 이하여야 합니다.');
         status.textContent=`${completed+1}/${files.length}장 준비 중…`;
         const body=new FormData();body.append('file',file);
-        const draft=await request('/api/gallery/drafts',{method:'POST',body});photos.push({draftId:draft.id,turns:0});dirty=true;completed++;render();
+        const draft=await request('/api/gallery/drafts',{method:'POST',body});ownedDrafts.add(draft.id);photos.push({draftId:draft.id,turns:0});dirty=true;completed++;render();
       }
       status.textContent='';
     }catch(error){status.textContent=`${error.message} 준비된 사진은 화면에 유지됩니다. 실패한 파일을 다시 선택해 주세요.`;}

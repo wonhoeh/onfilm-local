@@ -26,12 +26,12 @@ public class PortraitController {
     @Transactional
     void upload(@RequestParam MultipartFile file, @RequestParam long version) throws IOException {
         byte[] normalized = ImageNormalizer.normalize(file);
-        changed(jdbc.update("UPDATE profile SET portrait=?, version=version+1 WHERE id=1 AND version=?", normalized, version));
+        changed(jdbc.update("UPDATE profile SET portrait=?, portrait_x=50, portrait_y=50, version=version+1 WHERE id=1 AND version=?", normalized, version));
     }
     @DeleteMapping
     @Transactional
     void delete(@RequestParam long version) {
-        changed(jdbc.update("UPDATE profile SET portrait=NULL, version=version+1 WHERE id=1 AND version=?", version));
+        changed(jdbc.update("UPDATE profile SET portrait=NULL, portrait_x=50, portrait_y=50, version=version+1 WHERE id=1 AND version=?", version));
     }
     private static void changed(int count) { if (count != 1) throw new ResponseStatusException(HttpStatus.CONFLICT); }
 }

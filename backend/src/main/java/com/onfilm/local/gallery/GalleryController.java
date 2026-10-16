@@ -1,6 +1,7 @@
 package com.onfilm.local.gallery;
 
 import com.onfilm.local.media.image.ImageNormalizer;
+import com.onfilm.local.media.image.ImagePosition;
 
 import java.io.IOException;
 import java.util.*;
@@ -18,10 +19,16 @@ import org.springframework.web.server.ResponseStatusException;
 public class GalleryController {
     private final JdbcTemplate jdbc;
     public GalleryController(JdbcTemplate jdbc) { this.jdbc = jdbc; }
-    public record Gallery(long version, List<String> ids) { }
+    public record Gallery(long version, List<String> ids, Map<String,ImagePosition> positions) { }
     public record Order(@Min(0) long version, @NotNull @Size(max=12) List<@NotNull String> ids) { }
     public record Draft(String id) { }
-    public record Photo(String id, String draftId, @Min(0) @Max(3) int turns) { }
+    @DeleteMapping("/drafts/{id}")
+    void discard(@PathVariable String id){jdbc.update("DELETE FROM gallery_photo_draft WHERE id=?",id);}
+    @PatchMapping("/drafts/{id}")
+    void touch(@PathVariable String id){jdbc.update("UPDATE gallery_photo_draft SET last_seen_at=CURRENT_TIMESTAMP WHERE id=?",id);}
+    public record Photo(String id, String draftId, @Min(0) @Max(3) int turns, ImagePosition position) {
+        public Photo(String id,String draftId,int turns){this(id,draftId,turns,null);}
+    }
     public record Edit(@Min(0) long version, @NotNull @Size(max=12) List<@NotNull @Valid Photo> photos) { }
     @PostMapping("/drafts")
     Draft stage(@RequestParam MultipartFile file) {
@@ -32,6 +39,7 @@ public class GalleryController {
     }
     @GetMapping("/drafts/{id}/image")
     ResponseEntity<byte[]> draftImage(@PathVariable String id) {
+        touch(id);
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(bytes(id,true));
     }
     private byte[] bytes(String id,boolean draft) {
@@ -53,11 +61,13 @@ public class GalleryController {
             if(!sources.add((draft?"draft:":"saved:")+source))throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
             if(draft && jdbc.queryForList("SELECT id FROM gallery_photo_draft WHERE id=? FOR UPDATE",String.class,source).isEmpty())throw new ResponseStatusException(HttpStatus.CONFLICT);
             byte[] image=rotate(bytes(source,draft),photo.turns());
+            ImagePosition display=photo.position();
+            if(display==null)display=(draft?ImagePosition.center():jdbc.queryForObject("SELECT display_x,display_y FROM gallery_photo WHERE id=?",(r,n)->new ImagePosition(r.getInt(1),r.getInt(2)),source)).rotate(photo.turns());
             String id=draft?UUID.randomUUID().toString():source;
             if(draft){
-                jdbc.update("INSERT INTO gallery_photo(id,position,image) VALUES (?,?,?)",id,position,image);
+                jdbc.update("INSERT INTO gallery_photo(id,position,image,display_x,display_y) VALUES (?,?,?,?,?)",id,position,image,display.x(),display.y());
                 jdbc.update("DELETE FROM gallery_photo_draft WHERE id=?",source);
-            }else jdbc.update("UPDATE gallery_photo SET position=?,image=? WHERE id=?",position,image,id);
+            }else jdbc.update("UPDATE gallery_photo SET position=?,image=?,display_x=?,display_y=? WHERE id=?",position,image,display.x(),display.y(),id);
             retained.add(id);position++;
         }
         for(String id:ids())if(!retained.contains(id))jdbc.update("DELETE FROM gallery_photo WHERE id=?",id);
@@ -81,7 +91,9 @@ public class GalleryController {
     @Transactional(isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ, readOnly=true)
     Gallery get() {
         long version = jdbc.queryForObject("SELECT version FROM gallery_state WHERE id=1", Long.class);
-        return new Gallery(version, ids());
+        Map<String,ImagePosition> positions=new LinkedHashMap<>();
+        jdbc.query("SELECT id,display_x,display_y FROM gallery_photo",(org.springframework.jdbc.core.RowCallbackHandler)r->positions.put(r.getString(1),new ImagePosition(r.getInt(2),r.getInt(3))));
+        return new Gallery(version, ids(),positions);
     }
     @GetMapping("/{id}/image")
     ResponseEntity<byte[]> image(@PathVariable String id) {

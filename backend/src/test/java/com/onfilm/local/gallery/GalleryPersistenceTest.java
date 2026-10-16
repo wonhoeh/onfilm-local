@@ -8,6 +8,29 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
 class GalleryPersistenceTest extends LocalPersistenceTest {
+    @Test void displayPositionFollowsIdThroughReorderRotationAndRestart()throws Exception {
+        var out=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(6,3,1),"png",out);
+        var file=new MockMultipartFile("file","photo.png","image/png",out.toByteArray());
+        String first,second;byte[] bytes;
+        try(var context=start()) {
+            var api=context.getBean(GalleryController.class);
+            first=api.add(file,0).ids().get(0);second=api.add(file,1).ids().get(1);bytes=api.image(first).getBody();
+            var position=new com.onfilm.local.media.image.ImagePosition(90,20);
+            api.save(new GalleryController.Edit(2,List.of(new GalleryController.Photo(second,null,0),new GalleryController.Photo(first,null,0,position))));
+            assertThat(api.get().positions().get(first)).isEqualTo(position);
+            assertThat(api.image(first).getBody()).isEqualTo(bytes);
+            assertThatThrownBy(()->api.save(new GalleryController.Edit(3,List.of(new GalleryController.Photo(first,null,0,new com.onfilm.local.media.image.ImagePosition(0,0)),new GalleryController.Photo("missing",null,0))))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+            assertThat(api.get().version()).isEqualTo(3);assertThat(api.get().positions().get(first)).isEqualTo(position);
+        }
+        try(var context=start()) {
+            var api=context.getBean(GalleryController.class);
+            assertThat(api.get().ids()).containsExactly(second,first);
+            assertThat(api.get().positions().get(first)).isEqualTo(new com.onfilm.local.media.image.ImagePosition(90,20));
+            api.save(new GalleryController.Edit(3,List.of(new GalleryController.Photo(first,null,1))));
+            assertThat(api.get().positions().get(first)).isEqualTo(new com.onfilm.local.media.image.ImagePosition(80,90));
+            assertThat(api.get().positions()).doesNotContainKey(second);
+        }
+    }
     @Test void stagedRotationAtomicSaveAndRestart()throws Exception {
         var image=new java.awt.image.BufferedImage(3,2,java.awt.image.BufferedImage.TYPE_INT_ARGB);
         image.setRGB(0,0,0xffff0000);image.setRGB(2,1,0xff0000ff);

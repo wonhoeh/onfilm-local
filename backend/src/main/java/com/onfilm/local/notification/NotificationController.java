@@ -24,4 +24,8 @@ public class NotificationController {
     public void read(@Valid @RequestBody ReadRequest request){
         jdbc.update("UPDATE app_notification SET read_at=CURRENT_TIMESTAMP WHERE id<=? AND read_at IS NULL",request.throughId());
     }
+    @PostMapping("/{id}/read") public void readOne(@PathVariable long id){
+        jdbc.update("UPDATE app_notification SET read_at=CURRENT_TIMESTAMP WHERE id=? AND read_at IS NULL",id);
+    }
+    @DeleteMapping public void clear(){jdbc.update("DELETE FROM app_notification");}
 }

@@ -33,7 +33,7 @@ public class FilmographyThumbnailController {
     Result upload(@PathVariable String id,@RequestParam MultipartFile file,@RequestParam long version) throws IOException {
         byte[] image=ImageNormalizer.normalize(file);
         claim(id,version);
-        jdbc.update("MERGE INTO filmography_thumbnail (film_id,image) KEY(film_id) VALUES (?,?)",id,image);
+        jdbc.update("MERGE INTO filmography_thumbnail (film_id,image,display_x,display_y,mobile_x,mobile_y) KEY(film_id) VALUES (?,?,50,50,50,50)",id,image);
         return new Result(version+1);
     }
     @DeleteMapping

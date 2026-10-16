@@ -22,7 +22,8 @@ function isAppUrl(value, origin) {
 
 function isPlayerFullscreen(permission, requestingUrl, isMainFrame, origin) {
   return permission === 'fullscreen' && isMainFrame === true && isAppUrl(requestingUrl, origin)
-    && /^\/(?:api\/exports\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/site\/)?video-player\.html$/.test(new URL(requestingUrl).pathname);
+    && (new URL(requestingUrl).pathname === '/edit-filmography.html'
+      || /^\/(?:api\/exports\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/site\/)?video-player\.html$/.test(new URL(requestingUrl).pathname));
 }
 
 module.exports = { serverOrigin, isAppUrl, isPlayerFullscreen };

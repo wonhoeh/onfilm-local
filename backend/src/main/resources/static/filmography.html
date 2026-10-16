@@ -15,8 +15,11 @@
     <p id="filmsStatus" role="status">필모그래피를 불러오는 중입니다.</p>
     <button type="button" class="btn" id="retryFilms" hidden>다시 읽기</button>
     <div id="filmGroups" hidden>
-      <section aria-labelledby="videoHeading"><h2 id="videoHeading">출연 영상 <span id="videoCount"></span></h2><div class="film-grid" id="videoFilms"></div><p class="group-empty" id="videoEmpty">등록된 출연 영상이 없습니다.</p></section>
-      <section aria-labelledby="experienceHeading"><h2 id="experienceHeading">출연 이력 <span id="experienceCount"></span></h2><div class="film-grid" id="experienceFilms"></div><p class="group-empty" id="experienceEmpty">영상 없이 등록한 작품이 없습니다.</p></section>
+      <section hidden aria-labelledby="videoHeading"><h2 id="videoHeading">단편 <span id="videoCount"></span></h2><div class="film-grid" id="videoFilms"></div><p class="group-empty" id="videoEmpty">등록된 단편 작품이 없습니다.</p></section>
+      <section hidden aria-labelledby="directingHeading"><h2 id="directingHeading">연출 <span id="directingCount"></span></h2><div class="film-grid" id="directingFilms"></div><p class="group-empty" id="directingEmpty">등록된 연출 작품이 없습니다.</p></section>
+      <section hidden aria-labelledby="leadHeading"><h2 id="leadHeading">주연 <span id="leadCount"></span></h2><div class="film-grid" id="leadFilms"></div><p class="group-empty" id="leadEmpty"></p></section>
+      <section hidden aria-labelledby="supportingHeading"><h2 id="supportingHeading">조연 <span id="supportingCount"></span></h2><div class="film-grid" id="supportingFilms"></div><p class="group-empty" id="supportingEmpty"></p></section>
+      <section hidden aria-labelledby="experienceHeading"><h2 id="experienceHeading">단역 <span id="experienceCount"></span></h2><div class="film-grid" id="experienceFilms"></div><p class="group-empty" id="experienceEmpty">등록된 단역이 없습니다.</p></section>
     </div>
   </main>
   <dialog id="filmDetails" aria-labelledby="detailsTitle"><h2 id="detailsTitle"></h2><p id="detailsText"></p><button type="button" class="btn" id="closeDetails">닫기</button></dialog>

@@ -27,7 +27,7 @@ public class PortfolioExportService {
     private final TransactionTemplate snapshot;
     private final AtomicBoolean busy=new AtomicBoolean();
     private static final List<String> ASSETS=List.of("css/common.css","css/actor-detail.css","css/local-detail.css",
-        "css/video-player.css","css/local-player.css","css/filmography-view.css","video-player.js","timeline-preview.js","film-preview.js",
+        "css/video-player.css","css/local-player.css","css/filmography-view.css","video-player.js","timeline-preview.js","film-preview.js","contact-email.js",
         "vendor/hls.js/hls.min.js","vendor/hls.js/LICENSE","images/profile-placeholder.png","images/film-placeholder.png",
         "icons/instagram.svg","icons/youtube.svg","icons/tiktok.svg","icons/link.svg","icons/simple-icons-LICENSE.txt","icons/bootstrap-icons-LICENSE.txt");
 
@@ -78,7 +78,7 @@ public class PortfolioExportService {
         }
         result.sort(Comparator.comparing(Result::createdAt).reversed());return result;
     }
-    public Result create() throws IOException {
+    public synchronized Result create() throws IOException {
         if(!busy.compareAndSet(false,true))throw new IllegalStateException("이미 공개본을 만들고 있습니다. 완료 후 다시 읽어 주세요.");
         String id=UUID.randomUUID().toString();Path stage=root.resolve(id+".partial"),site=stage.resolve("site");
         try {
@@ -124,9 +124,11 @@ public class PortfolioExportService {
     }
     private Map<String,Object> snapshot(Path site,List<Copy> copies) throws IOException {
         var data=new LinkedHashMap<String,Object>();
-        var profile=jdbc.queryForObject("SELECT name,one_line_intro,birth_date,birth_place,portrait FROM profile WHERE id=1",(r,n)->{
+        var profile=jdbc.queryForObject("SELECT name,one_line_intro,birth_date,birth_place,portrait,portrait_x,portrait_y,height_cm,weight_kg FROM profile WHERE id=1",(r,n)->{
             var p=new LinkedHashMap<String,Object>();p.put("name",r.getString(1));p.put("intro",r.getString(2));p.put("birthDate",r.getString(3));p.put("birthPlace",r.getString(4));
             byte[] portrait=r.getBytes(5);p.put("portrait",portrait==null?"images/profile-placeholder.png":writeImage(site,"portrait",portrait,960));
+            p.put("portraitPosition",Map.of("x",r.getInt(6),"y",r.getInt(7)));
+            p.put("heightCm",r.getBigDecimal(8));p.put("weightKg",r.getBigDecimal(9));
             return p;
         });
         if(profile.get("name")==null||profile.get("name").toString().isBlank())throw new IllegalStateException("먼저 프로필을 저장해 주세요.");
@@ -138,14 +140,20 @@ public class PortfolioExportService {
             return contact;
         }));
         data.put("photos",jdbc.query("SELECT image FROM gallery_photo ORDER BY position,id",(r,n)->writeImage(site,"photo-"+n,r.getBytes(1),1600)));
+        data.put("photoPositions",jdbc.query("SELECT display_x,display_y FROM gallery_photo ORDER BY position,id",(r,n)->Map.of("x",r.getInt(1),"y",r.getInt(2))));
         data.put("films",jdbc.query("SELECT * FROM filmography_item ORDER BY position,id",(r,n)->{
             String filmId=r.getString("id"),publicId="film-"+n;
             var film=new LinkedHashMap<String,Object>();film.put("id",publicId);film.put("title",r.getString("title"));film.put("year",r.getObject("release_year"));
             film.put("runtime",r.getObject("runtime_minutes"));film.put("genres",split(r.getString("genres")));film.put("roles",split(r.getString("roles")));
             film.put("characterName",r.getString("character_name"));film.put("castType",r.getString("cast_type"));film.put("ageRating",r.getString("age_rating"));
+            film.put("category",r.getString("category"));
             var thumbnails=jdbc.query("SELECT image FROM filmography_thumbnail WHERE film_id=?",(row,i)->row.getBytes(1),filmId);
             film.put("thumbnail","images/film-placeholder.png");
             if(!thumbnails.isEmpty())film.put("thumbnail",writeImage(site,publicId,thumbnails.get(0),640));
+            var thumbnailPositions=jdbc.query("SELECT display_x,display_y FROM filmography_thumbnail WHERE film_id=?",(row,i)->Map.of("x",row.getInt(1),"y",row.getInt(2)),filmId);
+            film.put("thumbnailPosition",thumbnailPositions.isEmpty()?Map.of("x",50,"y",50):thumbnailPositions.get(0));
+            var mobilePositions=jdbc.query("SELECT mobile_x,mobile_y FROM filmography_thumbnail WHERE film_id=?",(row,i)->Map.of("x",row.getInt(1),"y",row.getInt(2)),filmId);
+            film.put("mobileThumbnailPosition",mobilePositions.isEmpty()?Map.of("x",50,"y",50):mobilePositions.get(0));
             for(boolean trailer:List.of(false,true)){
             String mediaId=publicId+(trailer?"-trailer":"");
             var videos=jdbc.queryForList(trailer?"SELECT video_id FROM filmography_trailer WHERE film_id=?":"SELECT id FROM local_video WHERE film_id=?",String.class,filmId);

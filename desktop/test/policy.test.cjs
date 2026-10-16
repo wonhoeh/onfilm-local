@@ -30,6 +30,9 @@ test('only same origin web navigation is accepted', () => {
 test('only local main-frame player can request fullscreen, other permissions stay denied', () => {
   const origin='http://127.0.0.1:18765', player=origin+'/video-player.html?videoId=test';
   assert.equal(isPlayerFullscreen('fullscreen',player,true,origin),true);
+  assert.equal(isPlayerFullscreen('fullscreen',origin+'/edit-filmography.html',true,origin),true);
+  assert.equal(isPlayerFullscreen('fullscreen',origin+'/edit-filmography.html',false,origin),false);
+  assert.equal(isPlayerFullscreen('fullscreen','https://example.com/edit-filmography.html',true,origin),false);
   assert.equal(isPlayerFullscreen('fullscreen',origin+'/api/exports/12345678-1234-1234-1234-123456789abc/site/video-player.html',true,origin),true);
   assert.equal(isPlayerFullscreen('fullscreen',origin+'/api/exports/arbitrary/site/video-player.html',true,origin),false);
   for(const permission of ['media','geolocation','automatic-fullscreen','notifications','openExternal'])
